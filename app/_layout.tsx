@@ -1,57 +1,103 @@
+import { AppThemeProvider } from '@/context/ThemeProvider';
+import { db } from '@/db';
+import { profile } from '@/db/schema';
+import migrations from '@/drizzle/migrations';
+import { useTheme } from '@/hooks/useTheme';
+import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from '@expo-google-fonts/poppins';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, router, useRootNavigationState } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Text, View } from 'react-native';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/components/useColorScheme';
-
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
+export { ErrorBoundary } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+  initialRouteName: process.env.EXPO_PUBLIC_APP_MODE === 'studio' ? '(studio)' : '(app)',
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+function RootLayoutNav() {
+  const { isDark } = useTheme();
+
+  return (
+    <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(app)" />
+        <Stack.Screen name="(studio)" />
+      </Stack>
+    </ThemeProvider>
+  );
+}
+
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+  const { success: migrationsSuccess, error: migrationError } = useMigrations(db, migrations);
+  const [isRoutingReady, setIsRoutingReady] = useState(false);
+  const navigationState = useRootNavigationState();
 
   useEffect(() => {
-    if (loaded) {
+    if (fontError) throw fontError;
+  }, [fontError]);
+
+  useEffect(() => {
+    if (!migrationsSuccess || !navigationState?.key) return;
+
+    const routeApp = async () => {
+      try {
+        const appMode = process.env.EXPO_PUBLIC_APP_MODE;
+
+        if (appMode === 'studio') {
+          router.replace('/(studio)/(tabs)');
+          return;
+        }
+
+        const users = await db.select().from(profile).limit(1);
+        if (users.length === 0) {
+          router.replace('/(app)/onboarding');
+        } else {
+          router.replace('/(app)/(tabs)');
+        }
+      } catch (err) {
+      } finally {
+        setIsRoutingReady(true);
+      }
+    };
+
+    routeApp();
+  }, [migrationsSuccess, navigationState?.key]);
+
+  useEffect(() => {
+    if (fontsLoaded && migrationsSuccess && isRoutingReady) {
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
+  }, [fontsLoaded, migrationsSuccess, isRoutingReady]);
 
-  if (!loaded) {
+  if (migrationError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>{migrationError.message}</Text>
+      </View>
+    );
+  }
+
+  if (!fontsLoaded || !migrationsSuccess || !isRoutingReady) {
     return null;
   }
 
-  return <RootLayoutNav />;
-}
-
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <AppThemeProvider>
+      <RootLayoutNav />
+    </AppThemeProvider>
   );
 }

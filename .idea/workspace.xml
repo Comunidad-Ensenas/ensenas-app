@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="44b8ccdc-df67-4299-b22f-3e595d28aa71" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/eas.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app.json" beforeDir="false" afterPath="$PROJECT_DIR$/app.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(tabs)/_layout.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(tabs)/index.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(tabs)/two.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/_layout.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/_layout.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/modal.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/android-icon-background.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/android-icon-background.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/android-icon-foreground.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/android-icon-foreground.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/android-icon-monochrome.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/android-icon-monochrome.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/images/splash-icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/splash-icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/components/Themed.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/Themed.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/constants/Colors.ts" beforeDir="false" afterPath="$PROJECT_DIR$/constants/Colors.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pnpm-lock.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/pnpm-lock.yaml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 6
+}]]></component>
+  <component name="ProjectId" id="3BgqqDV07i1lrmSXY5FaLxY6W9R" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "master",
+    "nodejs_package_manager_path": "pnpm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-3bd3a6803838-JavaScript-WS-261.22158.274" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="44b8ccdc-df67-4299-b22f-3e595d28aa71" name="Changes" comment="" />
+      <created>1774921250914</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1774921250914</updated>
+      <workItem from="1774921255199" duration="31000" />
+    </task>
+    <servers />
+  </component>
+</project>

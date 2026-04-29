@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "tradusenas",
-    "slug": "tradusenas",
+    "name": "ensenas",
+    "slug": "ensenas",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "tradusenas",
+    "scheme": "ensenas",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -13,7 +13,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "¡Necesitamos acceso a la cámara para detectar tus señas!"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,18 +25,48 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "package": "com.anonymous.ensenas",
     },
     "web": {
       "bundler": "metro",
       "output": "static",
+      "crossOriginIsolated": true,
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-sqlite",
+      "expo-asset",
+      "react-native-fast-tflite",
+      "expo-sharing",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "¡Necesitamos acceso a la cámara para detectar tus señas!",
+          "enableMicrophonePermission": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0a7bcac6-b4bc-4c7c-bd43-867ec6e4ea33"
+      }
     }
   }
 }
