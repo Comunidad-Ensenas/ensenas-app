@@ -1,18 +1,27 @@
+import { Button } from '@/components/common/Button';
+import { Card } from '@/components/common/Card';
+import { IconButton } from '@/components/common/IconButton';
+import { Typography } from '@/components/common/Typography';
 import { useTheme } from '@/hooks/useTheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
+import { Camera, Check, DragHandGesture, Xmark } from 'iconoir-react-native';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraPermission } from 'react-native-vision-camera';
 import { WebView } from 'react-native-webview';
 
 export default function StudioConfigScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
+  const palette = (colors as any).palette;
   const { hasPermission, requestPermission } = useCameraPermission();
   const isFocused = useIsFocused();
-  
+
   const [landmarksData, setLandmarksData] = useState<any[]>([]);
+  const [capturedLandmarks, setCapturedLandmarks] = useState<any | null>(null);
+
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const [manualConfigName, setManualConfigName] = useState('');
 
   useEffect(() => {
@@ -24,22 +33,22 @@ export default function StudioConfigScreen() {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.error) return;
       setLandmarksData(data);
-    } catch (e) {}
+    } catch (e) { }
   };
 
-  const handleSaveManualConfig = async () => {
-    if (!manualConfigName.trim()) {
-      Alert.alert("Falta el nombre", "Por favor, escriba el nombre de la configuración manual.");
-      return;
+  const handleCapture = () => {
+    if (landmarksData.length > 0) {
+      setCapturedLandmarks(landmarksData[0]);
+      setIsModalVisible(true);
     }
-    if (landmarksData.length === 0) {
-      Alert.alert("Mano no detectada", "Asegúrese de que la cámara esté viendo su mano.");
-      return;
-    }
+  };
+
+  const handleSaveConfig = async () => {
+    if (!manualConfigName.trim() || !capturedLandmarks) return;
 
     const newConfig = {
       name: manualConfigName.trim(),
-      landmarks: landmarksData[0],
+      landmarks: capturedLandmarks,
       timestamp: new Date().toISOString()
     };
 
@@ -47,12 +56,19 @@ export default function StudioConfigScreen() {
       const storedData = await AsyncStorage.getItem('@ensenas_manual_configs');
       const currentData = storedData ? JSON.parse(storedData) : [];
       await AsyncStorage.setItem('@ensenas_manual_configs', JSON.stringify([...currentData, newConfig]));
-      
+
       setManualConfigName('');
-      Alert.alert("Guardado", "La configuración manual se guardó correctamente.");
+      setCapturedLandmarks(null);
+      setIsModalVisible(false);
     } catch (e) {
-      Alert.alert("Error", "Ocurrió un problema al guardar.");
+      console.error("Error guardando config", e);
     }
+  };
+
+  const closeModal = () => {
+    setIsModalVisible(false);
+    setManualConfigName('');
+    setCapturedLandmarks(null);
   };
 
   const htmlContent = `
@@ -125,9 +141,8 @@ export default function StudioConfigScreen() {
               }
               hadHandsLastFrame = true;
               for (const landmarks of results.landmarks) {
-                // Colores pastel para el esqueleto también
-                drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "rgba(255,255,255,0.6)", lineWidth: 4 });
-                drawingUtils.drawLandmarks(landmarks, { color: "#A2D2FF", lineWidth: 2, radius: 4 });
+                drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "rgba(255,255,255,0.7)", lineWidth: 4 });
+                drawingUtils.drawLandmarks(landmarks, { color: "#38BDF8", lineWidth: 2, radius: 5 });
               }
             } else {
               if (hadHandsLastFrame) {
@@ -147,7 +162,7 @@ export default function StudioConfigScreen() {
   if (!hasPermission) {
     return (
       <View style={[styles.loader, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={palette.deepSkyBlue} />
       </View>
     );
   }
@@ -155,74 +170,100 @@ export default function StudioConfigScreen() {
   const isDetected = landmarksData.length > 0;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        
-        {/* Cabecera estilo limpio y alineado a la izquierda */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Capturar</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Configuración manual</Text>
-        </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
 
-        {/* Cámara como tarjeta flotante */}
-        <View style={styles.cameraWrapper}>
-          <View style={[styles.cameraContainer, { borderColor: colors.border }]}>
-            {isFocused && (
-              <WebView
-                style={styles.webview}
-                source={{ html: htmlContent, baseUrl: 'https://localhost' }}
-                allowsInlineMediaPlayback={true}
-                mediaPlaybackRequiresUserAction={false}
-                javaScriptEnabled={true}
-                domStorageEnabled={true}
-                onMessage={onMessage}
+      <View style={styles.header}>
+        <View style={styles.headerTitleContainer}>
+          <Typography variant="h3">Configuraciones manuales</Typography>
+        </View>
+      </View>
+
+      <View style={styles.cameraWrapper}>
+        <View style={[styles.cameraContainer, { borderColor: colors.border }]}>
+          {isFocused && (
+            <WebView
+              style={styles.webview}
+              source={{ html: htmlContent, baseUrl: 'https://localhost' }}
+              allowsInlineMediaPlayback={true}
+              mediaPlaybackRequiresUserAction={false}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              onMessage={onMessage}
+            />
+          )}
+
+          <View style={[styles.statusOverlay, { backgroundColor: isDetected ? 'rgba(16, 185, 129, 0.8)' : 'rgba(0,0,0,0.6)' }]}>
+            <DragHandGesture width={18} height={18} color="#FFF" strokeWidth={2} />
+            <Typography variant="label" color="#FFFFFF" style={{ fontWeight: '600' }}>
+              {isDetected ? "Mano lista para capturar" : "Enfoca tu mano..."}
+            </Typography>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.controlsWrapper}>
+        <Pressable
+          style={[styles.shutterButton, {
+            borderColor: isDetected ? palette.deepSkyBlue : colors.border,
+            opacity: isDetected ? 1 : 0.5
+          }]}
+          onPress={handleCapture}
+          disabled={!isDetected}
+        >
+          <View style={[styles.shutterInner, { backgroundColor: isDetected ? palette.deepSkyBlue : colors.surface }]}>
+            <Camera width={32} height={32} color={isDetected ? "#FFFFFF" : colors.textSecondary} strokeWidth={2} />
+          </View>
+        </Pressable>
+      </View>
+
+      <Modal animationType="fade" transparent={true} visible={isModalVisible} onRequestClose={closeModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={closeModal} />
+
+          <Card style={[styles.dialogCard, { backgroundColor: colors.background }]}>
+            <View style={styles.dialogHeader}>
+              <Typography variant="h2">Nombrar Configuración</Typography>
+              <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={closeModal} />
+            </View>
+
+            <View style={styles.dialogBody}>
+              <Typography variant="body" color={colors.textSecondary} style={{ marginBottom: 16 }}>
+                Asigna un nombre descriptivo para esta forma de la mano. Esto ayudará a buscarla más rápido en el futuro.
+              </Typography>
+
+              <TextInput
+                style={[styles.input, { color: colors.text, backgroundColor: colors.input, borderColor: manualConfigName ? palette.deepSkyBlue : 'transparent' }]}
+                placeholder="Ej: Letra A, Índice extendido..."
+                placeholderTextColor={colors.textSecondary}
+                value={manualConfigName}
+                onChangeText={setManualConfigName}
+                autoFocus={true}
               />
-            )}
-          </View>
-        </View>
-        
-        {/* Panel de captura flotante */}
-        <View style={[styles.capturePanel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          
-          {/* Píldora indicadora de estado */}
-          <View style={[styles.statusPill, { backgroundColor: isDetected ? colors.successBg : colors.dangerBg }]}>
-            <View style={[styles.dot, { backgroundColor: isDetected ? colors.success : colors.danger }]} />
-            <Text style={[styles.statusText, { color: isDetected ? colors.success : colors.danger }]}>
-              {isDetected ? "Mano detectada" : "Buscando mano..."}
-            </Text>
-          </View>
+            </View>
 
-          <TextInput
-            style={[styles.input, { 
-              color: colors.text, 
-              backgroundColor: colors.input, 
-              borderColor: manualConfigName ? colors.primary : colors.border 
-            }]}
-            placeholder="Ej: Letra A, Pulgar arriba..."
-            placeholderTextColor={colors.textSecondary}
-            value={manualConfigName}
-            onChangeText={setManualConfigName}
-          />
+            <View style={[styles.dialogFooter, { borderTopColor: colors.border }]}>
+              <Button
+                title="Cancelar"
+                variant="secondary"
+                color={colors.surface}
+                textColor={colors.text}
+                onPress={closeModal}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Guardar"
+                color={palette.deepSkyBlue}
+                textColor="#FFFFFF"
+                icon={<Check width={20} height={20} color="#FFFFFF" strokeWidth={2.5} />}
+                onPress={handleSaveConfig}
+                disabled={!manualConfigName.trim()}
+                style={{ flex: 1.5, opacity: !manualConfigName.trim() ? 0.6 : 1 }}
+              />
+            </View>
+          </Card>
+        </KeyboardAvoidingView>
+      </Modal>
 
-          <Pressable 
-            style={[
-              styles.captureBtn, 
-              { 
-                backgroundColor: colors.primary, 
-                opacity: isDetected && manualConfigName ? 1 : 0.4 
-              }
-            ]} 
-            onPress={handleSaveManualConfig}
-            disabled={!isDetected || !manualConfigName}
-          >
-            {/* Texto dinámico según el tema para que resalte sobre el color pastel */}
-            <Text style={[styles.captureBtnText, { color: (colors as any).primaryText || '#000' }]}>
-              GUARDAR CONFIGURACIÓN
-            </Text>
-          </Pressable>
-
-        </View>
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -230,69 +271,63 @@ export default function StudioConfigScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
-  // Tipografía jerárquica
-  header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, fontWeight: '500', marginTop: 4 },
-  
-  // Wrapper para separar la cámara de los bordes (Efecto Tarjeta)
-  cameraWrapper: { flex: 1, paddingHorizontal: 20, paddingBottom: 20 },
-  cameraContainer: { 
-    flex: 1, 
-    borderRadius: 32, // Súper redondeado
-    overflow: 'hidden', 
-    backgroundColor: '#000',
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 12 },
+  headerTitleContainer: { flex: 1, alignItems: 'center' },
+  cameraWrapper: { flex: 1, paddingHorizontal: 16, paddingBottom: 4 },
+  cameraContainer: {
+    flex: 1,
+    borderRadius: 32,
+    overflow: 'hidden',
+    backgroundColor: '#111',
     borderWidth: 1,
+    position: 'relative'
   },
   webview: { flex: 1, backgroundColor: 'transparent' },
-  
-  // Panel inferior flotante
-  capturePanel: { 
-    marginHorizontal: 20,
-    marginBottom: Platform.OS === 'ios' ? 20 : 30,
-    padding: 24, 
-    gap: 20, 
-    borderRadius: 32, // Súper redondeado
-    borderWidth: 1,
-  },
-  
-  // Píldora de estado (estilo moderno)
-  statusPill: { 
-    alignSelf: 'flex-start',
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    gap: 8 
-  },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
-  
-  // Inputs y botones generosos
-  input: { 
-    paddingHorizontal: 20, 
-    paddingVertical: 18, 
-    borderRadius: 20, 
-    fontSize: 16, 
-    borderWidth: 1,
-    fontWeight: '500'
-  },
-  captureBtn: { 
-    paddingVertical: 20, 
-    borderRadius: 24, // Bordes súper suaves en botones
+  statusOverlay: {
+    position: 'absolute',
+    top: 20,
+    alignSelf: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    gap: 10,
   },
-  captureBtnText: { 
-    fontWeight: '800', 
-    fontSize: 15, 
-    letterSpacing: 1,
-    textTransform: 'uppercase'
+  controlsWrapper: {
+    paddingVertical: 20,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 100,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-}); 
+  shutterButton: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shutterInner: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  dialogCard: { width: '90%', padding: 0, overflow: 'hidden' },
+  dialogHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingBottom: 16 },
+  dialogBody: { paddingHorizontal: 24, paddingBottom: 24 },
+  input: {
+    fontSize: 16,
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    fontWeight: '600',
+    width: '100%',
+    borderWidth: 2
+  },
+  dialogFooter: { flexDirection: 'row', gap: 12, padding: 24, paddingTop: 16, borderTopWidth: 1 },
+});

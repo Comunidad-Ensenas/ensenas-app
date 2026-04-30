@@ -1,6 +1,5 @@
 import { useTheme } from '@/hooks/useTheme';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { BookStack, HomeSimple, PeaceHand, ProfileCircle } from 'iconoir-react-native';
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,27 +53,13 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             : route.name;
 
         const activeColor = isFocused ? palette.deepSkyBlue : colors.textSecondary;
-        const strokeWidth = isFocused ? 2.2 : 1.8;
 
-        const getIcon = () => {
-          switch (route.name) {
-            case 'index':
-              return <HomeSimple width={26} height={26} color={activeColor} strokeWidth={strokeWidth} />;
-            case 'practice':
-              return <PeaceHand width={26} height={26} color={activeColor} strokeWidth={strokeWidth} />;
-            case 'dictionary':
-              return <BookStack width={26} height={26} color={activeColor} strokeWidth={strokeWidth} />;
-            case 'profile':
-              return <ProfileCircle width={26} height={26} color={activeColor} strokeWidth={strokeWidth} />;
-            default:
-              return <HomeSimple width={26} height={26} color={activeColor} strokeWidth={strokeWidth} />;
-          }
-        };
+        const renderIcon = options.tabBarIcon;
 
         return (
           <TabBarItem
             key={route.key}
-            icon={getIcon()}
+            icon={renderIcon ? renderIcon({ focused: isFocused, color: activeColor, size: 26 }) : null}
             label={label}
             isFocused={isFocused}
             onPress={onPress}

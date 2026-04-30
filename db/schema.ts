@@ -23,6 +23,7 @@ export const manualConfigurations = sqliteTable('manual_configurations', {
   code: text('code'),
   name: text('name').notNull(),
   imagePath: text('image_path'),
+  vectorData: text('vector_data').notNull(),
 });
 
 export const signCategories = sqliteTable('sign_categories', {
@@ -44,6 +45,7 @@ export const signModules = sqliteTable('sign_modules', {
 export const signs = sqliteTable('signs', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   title: text('title').notNull(),
+  meaningsJson: text('meanings_json'),
   description: text('description'),
   categoryId: integer('category_id').references(() => signCategories.id),
   configHandDominantId: integer('config_hand_dominant_id').references(() => manualConfigurations.id),

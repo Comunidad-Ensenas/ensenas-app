@@ -1,36 +1,43 @@
 import { CustomTabBar } from '@/components/navigation/CustomTabBar';
-import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { ChatBubble, PeaceHand, ShareAndroid, VideoCamera } from 'iconoir-react-native';
 import React from 'react';
 
 export default function StudioTabsLayout() {
   return (
-    <Tabs 
+    <Tabs
       tabBar={props => <CustomTabBar {...props} />}
-      screenOptions={{ 
-        headerShown: false, 
+      screenOptions={{
+        headerShown: false,
       }}
     >
-      <Tabs.Screen 
-        name="index" 
-        options={{ 
-          title: 'Configuraciones',
-          tabBarIcon: ({ color }) => <MaterialIcons name="pan-tool" size={24} color={color} />
-        }} 
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Formas',
+          tabBarIcon: ({ color }) => <PeaceHand width={24} height={24} color={color} strokeWidth={2} />
+        }}
       />
-      <Tabs.Screen 
-        name="capture" 
-        options={{ 
+      <Tabs.Screen
+        name="capture"
+        options={{
           title: 'Señas',
-          tabBarIcon: ({ color }) => <MaterialIcons name="videocam" size={24} color={color} />
-        }} 
+          tabBarIcon: ({ color }) => <VideoCamera width={24} height={24} color={color} strokeWidth={2} />
+        }}
       />
-      <Tabs.Screen 
-        name="export" 
-        options={{ 
+      <Tabs.Screen
+        name="phrases"
+        options={{
+          title: 'Frases',
+          tabBarIcon: ({ color }) => <ChatBubble width={24} height={24} color={color} strokeWidth={2} />
+        }}
+      />
+      <Tabs.Screen
+        name="export"
+        options={{
           title: 'Compartir',
-          tabBarIcon: ({ color }) => <MaterialIcons name="share" size={24} color={color} />
-        }} 
+          tabBarIcon: ({ color }) => <ShareAndroid width={24} height={24} color={color} strokeWidth={2} />
+        }}
       />
     </Tabs>
   );
