@@ -29,6 +29,8 @@ export const signCategories = sqliteTable('sign_categories', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
   description: text('description'),
+  iconName: text('icon_name').notNull().default('BookStack'),
+  colorHex: text('color_hex').notNull().default('#10B981'),
 });
 
 export const signModules = sqliteTable('sign_modules', {

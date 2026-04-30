@@ -139,8 +139,7 @@ export default function ProfileScreen() {
 
   const handleSendFeedback = () => {
     setIsSettingsVisible(false);
-    // router.push('../feedback'); // Descomentar cuando la sección exista
-    console.log("Navegando a comentarios...");
+    router.push('../feedback');
   };
 
   const handleEditProfile = () => {
@@ -352,7 +351,6 @@ export default function ProfileScreen() {
               <View style={styles.divider} />
               <Typography variant="label" color={colors.textSecondary} style={{ marginBottom: 16, marginTop: 8 }}>SOPORTE</Typography>
 
-              {/* CAMBIO: Enviar comentarios en lugar de Debug */}
               <Pressable style={styles.settingRow} onPress={handleSendFeedback}>
                 <View style={styles.settingLabelContainer}>
                   <IconBox size={44} icon={<ChatBubble width={22} height={22} color={colors.textSecondary} strokeWidth={2} />} backgroundColor={colors.textSecondary + '20'} />

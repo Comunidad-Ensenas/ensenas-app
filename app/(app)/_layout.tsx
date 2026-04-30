@@ -8,6 +8,7 @@ export default function AppLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="edit-profile" />
+        <Stack.Screen name="feedback" />
       </Stack>
     </UserProvider>
   );

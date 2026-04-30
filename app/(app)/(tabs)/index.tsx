@@ -31,14 +31,14 @@ export default function HomeScreen() {
   if (isLoading || !userData) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.scrollContent}>
-          <View style={styles.header}>
-            <View>
-              <Animated.View style={[styles.skeletonTextSmall, { backgroundColor: colors.border, opacity: pulseAnim }]} />
-              <Animated.View style={[styles.skeletonTextLarge, { backgroundColor: colors.border, opacity: pulseAnim }]} />
-            </View>
-            <Animated.View style={[styles.skeletonAvatar, { backgroundColor: colors.border, opacity: pulseAnim }]} />
+        <View style={[styles.header, { backgroundColor: colors.background }]}>
+          <View>
+            <Animated.View style={[styles.skeletonTextSmall, { backgroundColor: colors.border, opacity: pulseAnim }]} />
+            <Animated.View style={[styles.skeletonTextLarge, { backgroundColor: colors.border, opacity: pulseAnim }]} />
           </View>
+          <Animated.View style={[styles.skeletonAvatar, { backgroundColor: colors.border, opacity: pulseAnim }]} />
+        </View>
+        <View style={styles.scrollContent}>
           <Animated.View style={[styles.skeletonMainCard, { backgroundColor: colors.surface, opacity: pulseAnim }]} />
         </View>
       </SafeAreaView>
@@ -51,21 +51,22 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+      
+      <View style={[styles.header, { backgroundColor: colors.background }]}>
+        <View>
+          <Typography variant="label" color={colors.textSecondary} style={{ marginBottom: 4 }}>Hola de nuevo</Typography>
+          <Typography variant="h1">{userData.firstName}</Typography>
+        </View>
+        <Avatar 
+          icon={<User width={26} height={26} color={colors.primary} strokeWidth={2.2} />} 
+          backgroundColor={colors.primary + '25'} 
+          size={56}
+          onPress={() => router.push('/profile')}
+        />
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
-        <View style={styles.header}>
-          <View>
-            <Typography variant="label" color={colors.textSecondary} style={{ marginBottom: 4 }}>Vamos a aprender</Typography>
-            <Typography variant="h1">{userData.firstName}</Typography>
-          </View>
-          <Avatar 
-            icon={<User width={26} height={26} color={colors.primary} strokeWidth={2.2} />} 
-            backgroundColor={colors.primary + '25'} 
-            size={56}
-            onPress={() => router.push('/profile')}
-          />
-        </View>
-
         <Card variant="contrast" style={styles.mainCard}>
           <View style={[StyleSheet.absoluteFill, styles.cardInnerWrapper]}>
              <View style={[styles.decorativeCircle, { backgroundColor: 'rgba(255,255,255,0.03)', right: -40, top: -20 }]} />
@@ -141,8 +142,15 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 90 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    zIndex: 10 
+  },
+  scrollContent: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 90 },
   mainCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 36, position: 'relative' },
   cardInnerWrapper: { borderRadius: 32, overflow: 'hidden' },
   decorativeCircle: { position: 'absolute', width: 140, height: 140, borderRadius: 70 },
