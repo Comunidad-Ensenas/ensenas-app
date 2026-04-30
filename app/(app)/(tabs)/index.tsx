@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/common/SectionHeader';
 import { Typography } from '@/components/common/Typography';
 import { useTheme } from '@/hooks/useTheme';
 import { useUserData } from '@/hooks/useUserData';
+import { router } from 'expo-router';
 import { FireFlame, Group, Medal, Star, User } from 'iconoir-react-native';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
@@ -60,7 +61,8 @@ export default function HomeScreen() {
           <Avatar 
             icon={<User width={26} height={26} color={colors.primary} strokeWidth={2.2} />} 
             backgroundColor={colors.primary + '25'} 
-            size={56} 
+            size={56}
+            onPress={() => router.push('/profile')}
           />
         </View>
 

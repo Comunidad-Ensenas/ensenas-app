@@ -1,10 +1,14 @@
+import { UserProvider } from '@/hooks/useUserData';
 import { Stack } from 'expo-router';
 
 export default function AppLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="onboarding" />
-    </Stack>
+    <UserProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="edit-profile" />
+      </Stack>
+    </UserProvider>
   );
 }

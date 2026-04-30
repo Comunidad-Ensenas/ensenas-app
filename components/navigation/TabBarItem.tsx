@@ -18,13 +18,11 @@ export function TabBarItem({ icon, label, isFocused, onPress }: Props) {
 
   return (
     <Pressable onPress={onPress} style={styles.tabItem}>
-      {/* Indicador superior */}
       <View 
         style={[
           styles.indicator, 
           { 
             backgroundColor: isFocused ? activeColor : 'transparent',
-            // Pequeño resplandor (glow) en el indicador para que destaque más
             shadowColor: activeColor,
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: isFocused ? 0.4 : 0,
@@ -43,7 +41,6 @@ export function TabBarItem({ icon, label, isFocused, onPress }: Props) {
           style={[
             styles.tabLabel,
             {
-              // Cambiamos colors.text por activeColor para un mejor contraste
               color: isFocused ? activeColor : inactiveColor,
               fontWeight: isFocused ? '800' : '600',
               opacity: isFocused ? 1 : 0.7,

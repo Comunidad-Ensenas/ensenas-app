@@ -11,23 +11,20 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
   const insets = useSafeAreaInsets();
   const palette = (colors as any).palette;
 
-  // Ajuste sutil para los gestos de Android e iOS
-  const safeBottomPadding = Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16);
+  const extraPadding = Platform.OS === 'android' 
+    ? (insets.bottom > 24 ? 4 : 8) 
+    : 16; 
+
+  const safeBottomPadding = Math.max(insets.bottom + extraPadding, 20);
 
   return (
     <View 
       style={[
         styles.tabBarContainer, 
         { 
-          // En modo oscuro, usamos un gris un pelín más claro que el 'surface' (#121212)
-          // para crear profundidad física sin necesidad de bordes.
           backgroundColor: isDark ? '#1A1A1A' : colors.surface, 
-          
-          // Manejo de espacios naturales en lugar de altura fija
-          paddingTop: 16, // Le da aire por arriba para que no se sienta "pegado"
-          paddingBottom: safeBottomPadding, // Aire por abajo respetando la barra de gestos
-          
-          // El secreto del modo oscuro: Una sombra invertida (Glow) muy tenue
+          paddingTop: 16,
+          paddingBottom: safeBottomPadding, 
           shadowColor: isDark ? '#FFFFFF' : '#000000',
           shadowOpacity: isDark ? 0.04 : 0.06,
         }

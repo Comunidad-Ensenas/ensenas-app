@@ -10,6 +10,12 @@ export const profile = sqliteTable('profile', {
   isLeftHanded: integer('is_left_handed', { mode: 'boolean' }).default(false),
   dailyGoalMinutes: integer('daily_goal_minutes').default(5),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  learningMotivation: text('learning_motivation'),
+  experienceLevel: text('experience_level'),
+  avatarSkinTone: text('avatar_skin_tone'),
+  hapticFeedback: integer('haptic_feedback', { mode: 'boolean' }).default(true),
+  reminderTime: text('reminder_time'),
+  birthdate: text('birthdate'),
 });
 
 export const manualConfigurations = sqliteTable('manual_configurations', {
@@ -47,11 +53,49 @@ export const signs = sqliteTable('signs', {
   iconPath: text('icon_path'),
 });
 
-export const signsModules = sqliteTable('signs_modules', {
-  signId: integer('sign_id').references(() => signs.id).notNull(),
-  moduleId: integer('module_id').references(() => signModules.id).notNull(),
+export const phrases = sqliteTable('phrases', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  spanishTranslation: text('spanish_translation').notNull(),
+  lsvGloss: text('lsv_gloss').notNull(),
+  description: text('description'),
+});
+
+export const phraseSigns = sqliteTable('phrase_signs', {
+  phraseId: integer('phrase_id').notNull().references(() => phrases.id, { onDelete: 'cascade' }),
+  signId: integer('sign_id').notNull().references(() => signs.id, { onDelete: 'cascade' }),
+  orderIndex: integer('order_index').notNull(),
+  transitionDelayMs: integer('transition_delay_ms').default(0),
 }, (table) => [
-  primaryKey({ columns: [table.signId, table.moduleId] })
+  primaryKey({ columns: [table.phraseId, table.signId, table.orderIndex] })
+]);
+
+export const moduleItems = sqliteTable('module_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  moduleId: integer('module_id').notNull().references(() => signModules.id, { onDelete: 'cascade' }),
+  itemType: text('item_type').notNull(),
+  itemId: integer('item_id').notNull(),
+  orderIndex: integer('order_index').notNull(),
+});
+
+export const signExecutionHints = sqliteTable('sign_execution_hints', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  signId: integer('sign_id').notNull().references(() => signs.id, { onDelete: 'cascade' }),
+  hintText: text('hint_text').notNull(),
+  displayOrder: integer('display_order').notNull(),
+  durationMs: integer('duration_ms'),
+});
+
+export const culturalTips = sqliteTable('cultural_tips', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  content: text('content').notNull(),
+  category: text('category').notNull(),
+});
+
+export const modulePrerequisites = sqliteTable('module_prerequisites', {
+  moduleId: integer('module_id').notNull().references(() => signModules.id, { onDelete: 'cascade' }),
+  requiredModuleId: integer('required_module_id').notNull().references(() => signModules.id, { onDelete: 'cascade' }),
+}, (table) => [
+  primaryKey({ columns: [table.moduleId, table.requiredModuleId] })
 ]);
 
 export const moduleProgress = sqliteTable('module_progress', {

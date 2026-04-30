@@ -1,8 +1,25 @@
+import { Card } from '@/components/common/Card';
+import { IconBox } from '@/components/common/IconBox';
+import { IconButton } from '@/components/common/IconButton';
+import { Typography } from '@/components/common/Typography';
 import { db } from '@/db';
 import { profile } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
-import { MaterialIcons } from '@expo/vector-icons';
-import { Stack, router } from 'expo-router';
+import { router, Stack } from 'expo-router';
+import {
+  BookStack,
+  Calendar,
+  Check,
+  Heart,
+  NavArrowLeft,
+  NavArrowRight,
+  PeaceHand,
+  Rocket,
+  Settings,
+  Star,
+  Timer,
+  User
+} from 'iconoir-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -22,13 +39,28 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const { width } = Dimensions.get('window');
 
+const MOTIVATIONS = [
+  'Familiar Sordo',
+  'Profesional',
+  'Curiosidad',
+  'Académico',
+  'Inclusión',
+  'Comunicación',
+  'Voluntariado',
+  'Salud'
+];
+
 export default function OnboardingScreen() {
   const { colors, isDark } = useTheme();
+  const palette = (colors as any).palette;
   const insets = useSafeAreaInsets();
   
   const [step, setStep] = useState(0);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [birthdate, setBirthdate] = useState('');
+  const [experienceLevel, setExperienceLevel] = useState('');
+  const [learningMotivations, setLearningMotivations] = useState<string[]>([]);
   const [isLeftHanded, setIsLeftHanded] = useState(false);
   const [dailyGoalMinutes, setDailyGoalMinutes] = useState(5);
 
@@ -37,6 +69,42 @@ export default function OnboardingScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   const TOTAL_STEPS = 5;
+
+  const handleDateChange = (text: string) => {
+    let cleaned = text.replace(/[^0-9]/g, '');
+    if (cleaned.length > 2 && cleaned.length <= 4) {
+      cleaned = cleaned.slice(0, 2) + '/' + cleaned.slice(2);
+    } else if (cleaned.length > 4) {
+      cleaned = cleaned.slice(0, 2) + '/' + cleaned.slice(2, 4) + '/' + cleaned.slice(4, 8);
+    }
+    setBirthdate(cleaned);
+  };
+
+  const isValidBirthdate = (dateStr: string) => {
+    if (dateStr.length !== 10) return false;
+    const [day, month, year] = dateStr.split('/').map(Number);
+    if (!day || !month || !year) return false;
+    if (month < 1 || month > 12) return false;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    if (day < 1 || day > daysInMonth) return false;
+
+    const today = new Date();
+    const birthDateObj = new Date(year, month - 1, day);
+    let age = today.getFullYear() - birthDateObj.getFullYear();
+    const m = today.getMonth() - birthDateObj.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDateObj.getDate())) {
+      age--;
+    }
+    return age >= 3 && age <= 99;
+  };
+
+  const toggleMotivation = (mot: string) => {
+    if (learningMotivations.includes(mot)) {
+      setLearningMotivations(learningMotivations.filter(m => m !== mot));
+    } else {
+      setLearningMotivations([...learningMotivations, mot]);
+    }
+  };
 
   useEffect(() => {
     if (step > 0) {
@@ -84,8 +152,13 @@ export default function OnboardingScreen() {
     });
   };
 
+  const isNextDisabled = 
+    (step === 1 && !firstName.trim()) || 
+    (step === 2 && !isValidBirthdate(birthdate)) ||
+    (step === 3 && (!experienceLevel || learningMotivations.length === 0));
+
   const handleNext = () => {
-    if (step === 1 && firstName.trim() === '') return;
+    if (isNextDisabled) return;
     animateTransition(step + 1, 'forward');
   };
 
@@ -97,9 +170,15 @@ export default function OnboardingScreen() {
 
   const handleSave = async () => {
     try {
+      const [day, month, year] = birthdate.split('/');
+      const formattedBirthdate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
       await db.insert(profile).values({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        birthdate: formattedBirthdate,
+        experienceLevel,
+        learningMotivation: learningMotivations.join(', '),
         isLeftHanded,
         dailyGoalMinutes,
       });
@@ -114,47 +193,100 @@ export default function OnboardingScreen() {
       case 0:
         return (
           <View style={styles.stepContainer}>
-            <View style={[styles.welcomeIconContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <MaterialIcons name="waving-hand" size={64} color={colors.primary} />
-            </View>
-            <Text style={[styles.title, { color: colors.text }]}>¡Bienvenido!</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            <IconBox 
+              size={120} 
+              icon={<PeaceHand width={56} height={56} color={palette.powderBlush} strokeWidth={2} />} 
+              backgroundColor={palette.powderBlush + '20'}
+              style={{ marginBottom: 32, marginTop: 20 }}
+            />
+            <Typography variant="h1" style={{ marginBottom: 12, textAlign: 'center' }}>¡Bienvenido!</Typography>
+            <Typography variant="subtitle" color={colors.textSecondary} style={{ textAlign: 'center', lineHeight: 24, paddingHorizontal: 12 }}>
               Aprende Lengua de Señas de forma interactiva y a tu propio ritmo. Vamos a configurar tu perfil.
-            </Text>
+            </Typography>
           </View>
         );
       case 1:
         return (
           <View style={styles.stepContainer}>
-            <View style={[styles.iconContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <MaterialIcons name="person-outline" size={48} color={colors.primary} />
-            </View>
-            <Text style={[styles.title, { color: colors.text }]}>¿Cuál es tu nombre?</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>¿Cómo te gustaría que te llamemos?</Text>
-            <TextInput
-              style={[styles.input, { color: colors.text, backgroundColor: colors.input, borderColor: firstName ? colors.primary : colors.border }]}
-              placeholder="Ej. Jorge"
-              placeholderTextColor={colors.textSecondary}
-              value={firstName}
-              onChangeText={setFirstName}
-              autoFocus
+            <IconBox 
+              size={96} 
+              icon={<User width={40} height={40} color={palette.deepSkyBlue} strokeWidth={2} />} 
+              backgroundColor={palette.deepSkyBlue + '20'}
+              style={{ marginBottom: 32 }}
             />
+            <Typography variant="h2" style={{ marginBottom: 8, textAlign: 'center' }}>Identidad</Typography>
+            <Typography variant="body" color={colors.textSecondary} style={{ textAlign: 'center', marginBottom: 32 }}>
+              ¿Cómo te gustaría que te llamemos?
+            </Typography>
+            
+            <View style={styles.formGroup}>
+              <Typography variant="label" color={colors.textSecondary} style={{ marginBottom: 8, marginLeft: 4 }}>Nombre *</Typography>
+              <TextInput
+                style={[
+                  styles.input, 
+                  { 
+                    color: colors.text, 
+                    backgroundColor: colors.input, 
+                    borderColor: firstName ? palette.deepSkyBlue : 'transparent',
+                  }
+                ]}
+                placeholder="Ej. Alberto"
+                placeholderTextColor={colors.textSecondary}
+                value={firstName}
+                onChangeText={setFirstName}
+                maxLength={30}
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Typography variant="label" color={colors.textSecondary} style={{ marginBottom: 8, marginLeft: 4 }}>Apellido (Opcional)</Typography>
+              <TextInput
+                style={[
+                  styles.input, 
+                  { 
+                    color: colors.text, 
+                    backgroundColor: colors.input, 
+                    borderColor: lastName ? palette.deepSkyBlue : 'transparent',
+                  }
+                ]}
+                placeholder="Ej. López"
+                placeholderTextColor={colors.textSecondary}
+                value={lastName}
+                onChangeText={setLastName}
+                maxLength={30}
+              />
+            </View>
           </View>
         );
       case 2:
         return (
           <View style={styles.stepContainer}>
-            <View style={[styles.iconContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <MaterialIcons name="badge" size={48} color={colors.primary} />
-            </View>
-            <Text style={[styles.title, { color: colors.text }]}>¿Cuál es tu apellido?</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Opcional. Ayuda a personalizar tu perfil.</Text>
+            <IconBox 
+              size={96} 
+              icon={<Calendar width={40} height={40} color={palette.deepSkyBlue} strokeWidth={2} />} 
+              backgroundColor={palette.deepSkyBlue + '20'}
+              style={{ marginBottom: 32 }}
+            />
+            <Typography variant="h2" style={{ marginBottom: 8, textAlign: 'center' }}>¿Cuándo naciste?</Typography>
+            <Typography variant="body" color={colors.textSecondary} style={{ textAlign: 'center', marginBottom: 32 }}>
+              Para adaptar tu experiencia.
+            </Typography>
             <TextInput
-              style={[styles.input, { color: colors.text, backgroundColor: colors.input, borderColor: lastName ? colors.primary : colors.border }]}
-              placeholder="Ej. Landaeta"
+              style={[
+                styles.inputLarge, 
+                { 
+                  color: colors.text, 
+                  backgroundColor: colors.input, 
+                  borderColor: isValidBirthdate(birthdate) ? palette.deepSkyBlue : 'transparent',
+                }
+              ]}
+              placeholder="DD / MM / AAAA"
               placeholderTextColor={colors.textSecondary}
-              value={lastName}
-              onChangeText={setLastName}
+              value={birthdate}
+              onChangeText={handleDateChange}
+              keyboardType="numeric"
+              maxLength={10}
               autoFocus
             />
           </View>
@@ -162,98 +294,180 @@ export default function OnboardingScreen() {
       case 3:
         return (
           <View style={styles.stepContainer}>
-            <View style={[styles.iconContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <MaterialIcons name="sign-language" size={48} color={colors.primary} />
+            <IconBox 
+              size={96} 
+              icon={<Star width={40} height={40} color={palette.powderBlush} strokeWidth={2} />} 
+              backgroundColor={palette.powderBlush + '20'}
+              style={{ marginBottom: 24 }}
+            />
+            <Typography variant="h2" style={{ marginBottom: 8, textAlign: 'center' }}>Perfil de Estudiante</Typography>
+            <Typography variant="body" color={colors.textSecondary} style={{ textAlign: 'center', marginBottom: 24 }}>
+              Queremos conocerte un poco más.
+            </Typography>
+
+            <Typography variant="label" color={colors.text} style={{ width: '100%', marginBottom: 12 }}>Nivel previo de LSV</Typography>
+            <View style={styles.chipContainer}>
+              {['Ninguno', 'Básico', 'Intermedio'].map((lvl) => (
+                <Pressable
+                  key={lvl}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: colors.surface, borderColor: experienceLevel === lvl ? palette.powderBlush : 'transparent' }
+                  ]}
+                  onPress={() => setExperienceLevel(lvl)}
+                >
+                  <Typography variant="body" color={experienceLevel === lvl ? palette.powderBlush : colors.textSecondary} style={{ fontWeight: '600' }}>
+                    {lvl}
+                  </Typography>
+                </Pressable>
+              ))}
             </View>
-            <Text style={[styles.title, { color: colors.text }]}>¿Mano dominante?</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Ajustaremos las señas según tu preferencia.</Text>
-            <View style={styles.optionsContainer}>
-              <Pressable
-                style={[
-                  styles.optionCard, 
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                  !isLeftHanded && { borderColor: colors.primary }
-                ]}
-                onPress={() => setIsLeftHanded(false)}
-              >
-                <MaterialIcons name="front-hand" size={40} color={!isLeftHanded ? colors.primary : colors.icon} />
-                <Text style={[styles.optionText, { color: colors.textSecondary }, !isLeftHanded && { color: colors.primary }]}>Diestro</Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.optionCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                  isLeftHanded && { borderColor: colors.primary }
-                ]}
-                onPress={() => setIsLeftHanded(true)}
-              >
-                <MaterialIcons name="pan-tool" size={40} color={isLeftHanded ? colors.primary : colors.icon} style={{ transform: [{ scaleX: -1 }] }} />
-                <Text style={[styles.optionText, { color: colors.textSecondary }, isLeftHanded && { color: colors.primary }]}>Zurdo</Text>
-              </Pressable>
+
+            <Typography variant="label" color={colors.text} style={{ width: '100%', marginBottom: 12, marginTop: 12 }}>Motivaciones (Selecciona varias)</Typography>
+            <View style={styles.chipContainer}>
+              {MOTIVATIONS.map((mot) => {
+                const isActive = learningMotivations.includes(mot);
+                return (
+                  <Pressable
+                    key={mot}
+                    style={[
+                      styles.chip,
+                      { backgroundColor: colors.surface, borderColor: isActive ? palette.powderBlush : 'transparent' }
+                    ]}
+                    onPress={() => toggleMotivation(mot)}
+                  >
+                    <Typography variant="body" color={isActive ? palette.powderBlush : colors.textSecondary} style={{ fontWeight: '600' }}>
+                      {mot}
+                    </Typography>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
         );
       case 4:
         return (
           <View style={styles.stepContainer}>
-            <View style={[styles.iconContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <MaterialIcons name="timer" size={48} color={colors.primary} />
-            </View>
-            <Text style={[styles.title, { color: colors.text }]}>¿Meta de práctica?</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Minutos diarios para mantener tu racha.</Text>
+            <IconBox 
+              size={96} 
+              icon={<Settings width={40} height={40} color={'#F59E0B'} strokeWidth={2} />} 
+              backgroundColor={'#F59E0B' + '20'}
+              style={{ marginBottom: 24 }}
+            />
+            <Typography variant="h2" style={{ marginBottom: 8, textAlign: 'center' }}>Preferencias</Typography>
+            <Typography variant="body" color={colors.textSecondary} style={{ textAlign: 'center', marginBottom: 24 }}>
+              Configura tu entorno de práctica.
+            </Typography>
+            
+            <Typography variant="label" color={colors.text} style={{ width: '100%', marginBottom: 12 }}>Mano dominante</Typography>
             <View style={styles.optionsContainer}>
-              {[5, 10, 15, 20].map((mins) => (
-                <Pressable
-                  key={mins}
-                  style={[
-                    styles.goalOption,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                    dailyGoalMinutes === mins && { borderColor: colors.primary }
-                  ]}
-                  onPress={() => setDailyGoalMinutes(mins)}
-                >
-                  <Text style={[styles.goalText, { color: colors.textSecondary }, dailyGoalMinutes === mins && { color: colors.primary }]}>
-                    {mins} min
-                  </Text>
-                  {dailyGoalMinutes === mins && (
-                    <MaterialIcons name="check-circle" size={20} color={colors.primary} style={styles.checkIcon} />
-                  )}
-                </Pressable>
-              ))}
+              <Pressable
+                style={[
+                  styles.optionCardMini, 
+                  { backgroundColor: colors.surface, borderColor: !isLeftHanded ? '#F59E0B' : 'transparent' }
+                ]}
+                onPress={() => setIsLeftHanded(false)}
+              >
+                <PeaceHand width={32} height={32} color={!isLeftHanded ? '#F59E0B' : colors.textSecondary} strokeWidth={1.5} />
+                <Typography variant="subtitle" color={!isLeftHanded ? '#F59E0B' : colors.textSecondary} style={{ marginTop: 8 }}>Diestro</Typography>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.optionCardMini,
+                  { backgroundColor: colors.surface, borderColor: isLeftHanded ? '#F59E0B' : 'transparent' }
+                ]}
+                onPress={() => setIsLeftHanded(true)}
+              >
+                <PeaceHand width={32} height={32} color={isLeftHanded ? '#F59E0B' : colors.textSecondary} strokeWidth={1.5} style={{ transform: [{ scaleX: -1 }] }} />
+                <Typography variant="subtitle" color={isLeftHanded ? '#F59E0B' : colors.textSecondary} style={{ marginTop: 8 }}>Zurdo</Typography>
+              </Pressable>
+            </View>
+
+            <Typography variant="label" color={colors.text} style={{ width: '100%', marginBottom: 12, marginTop: 12 }}>Meta diaria (Minutos)</Typography>
+            <View style={styles.optionsContainer}>
+              {[5, 10, 15, 20].map((mins) => {
+                const isActive = dailyGoalMinutes === mins;
+                return (
+                  <Pressable
+                    key={mins}
+                    style={[
+                      styles.goalOptionMini,
+                      { backgroundColor: colors.surface, borderColor: isActive ? '#F59E0B' : 'transparent' }
+                    ]}
+                    onPress={() => setDailyGoalMinutes(mins)}
+                  >
+                    <Typography variant="h3" color={isActive ? '#F59E0B' : colors.textSecondary}>{mins}</Typography>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
         );
       case 5:
         return (
           <View style={styles.stepContainer}>
-            <View style={[styles.iconContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <MaterialIcons name="rocket-launch" size={48} color={colors.primary} />
-            </View>
-            <Text style={[styles.title, { color: colors.text }]}>¡Todo listo!</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Así quedó configurado tu perfil.</Text>
-            <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={[styles.summaryRow, { borderBottomColor: colors.border }]}>
+            <IconBox 
+              size={96} 
+              icon={<Rocket width={40} height={40} color={colors.success} strokeWidth={2} />} 
+              backgroundColor={colors.successBg}
+              style={{ marginBottom: 24 }}
+            />
+            <Typography variant="h2" style={{ marginBottom: 8, textAlign: 'center' }}>¡Todo listo!</Typography>
+            <Typography variant="body" color={colors.textSecondary} style={{ textAlign: 'center', marginBottom: 24 }}>
+              Así quedó configurado tu perfil.
+            </Typography>
+            
+            <Card style={styles.summaryCard}>
+              <View style={[styles.summaryRow, { borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
                 <View style={styles.summaryIconLabel}>
-                  <MaterialIcons name="person" size={22} color={colors.primary} />
-                  <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Nombre</Text>
+                  <User width={20} height={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Typography variant="label" color={colors.textSecondary}>Identidad</Typography>
                 </View>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>{firstName} {lastName}</Text>
+                <Typography variant="body" style={styles.summaryValue} numberOfLines={1}>{firstName} {lastName}</Typography>
               </View>
-              <View style={[styles.summaryRow, { borderBottomColor: colors.border }]}>
+
+              <View style={[styles.summaryRow, { borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
                 <View style={styles.summaryIconLabel}>
-                  <MaterialIcons name="front-hand" size={22} color={colors.primary} />
-                  <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Mano</Text>
+                  <Calendar width={20} height={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Typography variant="label" color={colors.textSecondary}>Nacimiento</Typography>
                 </View>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>{isLeftHanded ? 'Zurdo' : 'Diestro'}</Text>
+                <Typography variant="body" style={styles.summaryValue}>{birthdate}</Typography>
               </View>
-              <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
+
+              <View style={[styles.summaryRow, { borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
                 <View style={styles.summaryIconLabel}>
-                  <MaterialIcons name="timer" size={22} color={colors.primary} />
-                  <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Meta Diaria</Text>
+                  <BookStack width={20} height={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Typography variant="label" color={colors.textSecondary}>Nivel</Typography>
                 </View>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>{dailyGoalMinutes} min</Text>
+                <Typography variant="body" style={styles.summaryValue}>{experienceLevel}</Typography>
               </View>
-            </View>
+
+              <View style={[styles.summaryRow, { borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
+                <View style={styles.summaryIconLabel}>
+                  <Heart width={20} height={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Typography variant="label" color={colors.textSecondary}>Motivación</Typography>
+                </View>
+                <Typography variant="body" style={styles.summaryValue} numberOfLines={2}>
+                  {learningMotivations.join(', ')}
+                </Typography>
+              </View>
+
+              <View style={[styles.summaryRow, { borderBottomColor: colors.border, borderBottomWidth: 1 }]}>
+                <View style={styles.summaryIconLabel}>
+                  <PeaceHand width={20} height={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Typography variant="label" color={colors.textSecondary}>Mano</Typography>
+                </View>
+                <Typography variant="body" style={styles.summaryValue}>{isLeftHanded ? 'Zurdo' : 'Diestro'}</Typography>
+              </View>
+
+              <View style={[styles.summaryRow, { paddingBottom: 0 }]}>
+                <View style={styles.summaryIconLabel}>
+                  <Timer width={20} height={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Typography variant="label" color={colors.textSecondary}>Meta</Typography>
+                </View>
+                <Typography variant="body" style={styles.summaryValue}>{dailyGoalMinutes} min</Typography>
+              </View>
+            </Card>
           </View>
         );
       default:
@@ -269,10 +483,8 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
-      <StatusBar 
-        barStyle={isDark ? "light-content" : "dark-content"} 
-        backgroundColor={colors.background} 
-      />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+      
       <KeyboardAvoidingView 
         style={styles.container} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -280,14 +492,17 @@ export default function OnboardingScreen() {
         <View style={styles.headerWrapper}>
           {step > 0 ? (
             <View style={styles.progressHeader}>
-              <Pressable onPress={handleBack} style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <MaterialIcons name="arrow-back-ios-new" size={18} color={colors.text} />
-              </Pressable>
+              <IconButton 
+                size={44}
+                backgroundColor={colors.surface}
+                icon={<NavArrowLeft width={20} height={20} color={colors.text} strokeWidth={2.5} />}
+                onPress={handleBack}
+              />
               <View style={[styles.progressBarBg, { backgroundColor: colors.surface }]}>
                 <Animated.View style={[styles.progressBarFill, { width: progressWidth, backgroundColor: colors.primary }]} />
               </View>
               <View style={styles.stepIndicatorContainer}>
-                <Text style={[styles.stepIndicator, { color: colors.textSecondary }]}>{step}/{TOTAL_STEPS}</Text>
+                <Typography variant="label" color={colors.textSecondary}>{step}/{TOTAL_STEPS}</Typography>
               </View>
             </View>
           ) : (
@@ -314,38 +529,47 @@ export default function OnboardingScreen() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 12, 24) }]}>
-          {step < 5 ? (
+          {step < TOTAL_STEPS ? (
             <Pressable 
               style={({ pressed }) => [
-                styles.button,
-                { backgroundColor: colors.primary },
-                (step === 1 && !firstName.trim()) && { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
-                pressed && !(step === 1 && !firstName.trim()) && styles.buttonPressed
+                styles.heroButton,
+                { backgroundColor: isNextDisabled ? colors.surface : palette.powderBlush },
+                isNextDisabled && { borderWidth: 1, borderColor: colors.border },
+                pressed && !isNextDisabled && styles.heroButtonPressed
               ]} 
               onPress={handleNext}
-              disabled={step === 1 && !firstName.trim()}
+              disabled={isNextDisabled}
             >
-              <Text style={[styles.buttonText, { color: (step === 1 && !firstName.trim()) ? colors.textSecondary : (colors as any).primaryText }]}>
+              <Text style={[styles.heroButtonText, { color: isNextDisabled ? colors.textSecondary : (isDark ? '#111418' : '#FFFFFF') }]}>
                 {step === 0 ? 'Comenzar' : 'Siguiente'}
               </Text>
-              <MaterialIcons 
-                name="arrow-forward" 
-                size={20} 
-                color={(step === 1 && !firstName.trim()) ? colors.textSecondary : (colors as any).primaryText} 
-                style={styles.buttonIcon} 
+              <NavArrowRight 
+                width={22} 
+                height={22} 
+                color={isNextDisabled ? colors.textSecondary : (isDark ? '#111418' : '#FFFFFF')} 
+                strokeWidth={3}
+                style={styles.heroButtonIcon} 
               />
             </Pressable>
           ) : (
             <Pressable 
               style={({ pressed }) => [
-                styles.button,
-                { backgroundColor: colors.primary },
-                pressed && styles.buttonPressed
+                styles.heroButton,
+                { backgroundColor: colors.success },
+                pressed && styles.heroButtonPressed
               ]} 
               onPress={handleSave}
             >
-              <Text style={[styles.buttonText, { color: (colors as any).primaryText }]}>Comenzar Práctica</Text>
-              <MaterialIcons name="check" size={20} color={(colors as any).primaryText} style={styles.buttonIcon} />
+              <Text style={[styles.heroButtonText, { color: isDark ? '#111418' : '#FFFFFF' }]}>
+                Finalizar
+              </Text>
+              <Check 
+                width={22} 
+                height={22} 
+                color={isDark ? '#111418' : '#FFFFFF'} 
+                strokeWidth={3}
+                style={styles.heroButtonIcon} 
+              />
             </Pressable>
           )}
         </View>
@@ -377,170 +601,132 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 16,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   progressBarBg: {
     flex: 1,
     height: 10,
-    borderRadius: 10,
+    borderRadius: 5,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 10,
+    borderRadius: 5,
   },
   stepIndicatorContainer: {
     minWidth: 40,
     alignItems: 'flex-end',
   },
-  stepIndicator: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
   content: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 32,
+    paddingTop: 16,
     paddingBottom: 20,
   },
   stepContainer: {
     flexGrow: 1,
     alignItems: 'center',
   },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 32,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  welcomeIconContainer: {
-    width: 130,
-    height: 130,
-    borderRadius: 40,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 40,
-    marginTop: 20,
-  },
-  title: {
-    fontSize: 32,
-    marginBottom: 12,
-    fontWeight: '800',
-    textAlign: 'center',
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16,
-    marginBottom: 40,
-    fontWeight: '500',
-    textAlign: 'center',
-    paddingHorizontal: 12,
-    lineHeight: 24,
+  formGroup: {
+    width: '100%',
+    marginBottom: 20,
   },
   input: {
-    fontSize: 22,
-    borderWidth: 1,
+    fontSize: 16,
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    fontWeight: '600',
+    width: '100%',
+    borderWidth: 2,
+  },
+  inputLarge: {
+    fontSize: 26,
     borderRadius: 24,
     paddingVertical: 20,
     paddingHorizontal: 24,
-    fontWeight: '600',
+    fontWeight: '800',
     width: '100%',
     textAlign: 'center',
+    borderWidth: 2,
+    letterSpacing: 2,
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+  },
+  chip: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 24,
+    borderWidth: 2,
   },
   optionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     width: '100%',
-    gap: 16,
+    gap: 12,
   },
-  optionCard: {
-    width: '47%',
+  optionCardMini: {
+    width: '48%',
     alignItems: 'center',
-    paddingVertical: 32,
-    borderWidth: 2,
-    borderRadius: 32,
-  },
-  optionText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  goalOption: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 20,
     borderWidth: 2,
     borderRadius: 24,
-    width: '47%',
   },
-  goalText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  checkIcon: {
-    position: 'absolute',
-    right: 16,
+  goalOptionMini: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderWidth: 2,
+    borderRadius: 20,
+    width: '22%',
   },
   summaryCard: {
-    padding: 24,
-    borderRadius: 32,
     width: '100%',
-    borderWidth: 1,
+    padding: 24,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    paddingVertical: 20,
+    paddingVertical: 14,
   },
   summaryIconLabel: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  summaryLabel: {
-    fontSize: 16,
-    fontWeight: '600',
+    flexShrink: 0,
   },
   summaryValue: {
-    fontSize: 16,
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 16,
     fontWeight: '700',
   },
   footer: {
     paddingHorizontal: 24,
     paddingTop: 12,
   },
-  button: {
+  heroButton: {
     flexDirection: 'row',
     paddingVertical: 22,
     borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  buttonPressed: {
+  heroButtonPressed: {
     opacity: 0.8,
     transform: [{ scale: 0.97 }],
   },
-  buttonText: {
+  heroButtonText: {
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  buttonIcon: {
+  heroButtonIcon: {
     marginLeft: 8,
   },
 });

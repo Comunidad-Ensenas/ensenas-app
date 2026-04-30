@@ -62,8 +62,9 @@ export default function PracticeScreen() {
         <View style={styles.scrollContent}>
           <View style={styles.header}>
             <View>
-              <Animated.View style={[styles.skeletonTextLarge, { backgroundColor: colors.border, opacity: pulseAnim }]} />
+              {/* Skeletons unificados con el inicio */}
               <Animated.View style={[styles.skeletonTextSmall, { backgroundColor: colors.border, opacity: pulseAnim }]} />
+              <Animated.View style={[styles.skeletonTextLarge, { backgroundColor: colors.border, opacity: pulseAnim }]} />
             </View>
             <Animated.View style={[styles.skeletonAvatar, { backgroundColor: colors.border, opacity: pulseAnim }]} />
           </View>
@@ -80,14 +81,17 @@ export default function PracticeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
+        {/* Cabecera unificada visualmente con HomeScreen */}
         <View style={styles.header}>
           <View>
-            <Typography variant="h1" style={{ marginBottom: 4 }}>Práctica</Typography>
-            <Typography variant="subtitle" color={colors.textSecondary}>Tu plan de estudio</Typography>
+            <Typography variant="label" color={colors.textSecondary} style={{ marginBottom: 4 }}>Tu plan de estudio</Typography>
+            <Typography variant="h1">Práctica</Typography>
           </View>
           <Avatar
             icon={<User width={26} height={26} color={palette.powderBlush} strokeWidth={2.2} />}
             backgroundColor={palette.powderBlush + '25'}
+            size={56} // <- Agregado para que mida exactamente lo mismo que en el inicio
             onPress={() => router.push('/profile')}
           />
         </View>
@@ -203,8 +207,11 @@ const styles = StyleSheet.create({
   signListItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 20 },
   signListInfo: { flex: 1 },
   modalFooter: { padding: 24, paddingTop: 16 },
-  skeletonTextLarge: { width: 140, height: 32, borderRadius: 16, marginBottom: 8 },
-  skeletonTextSmall: { width: 100, height: 16, borderRadius: 8 },
-  skeletonAvatar: { width: 52, height: 52, borderRadius: 26 },
+  
+  // Skeletons unificados con HomeScreen
+  skeletonTextSmall: { width: 130, height: 18, borderRadius: 9, marginBottom: 8 },
+  skeletonTextLarge: { width: 190, height: 32, borderRadius: 16 },
+  skeletonAvatar: { width: 56, height: 56, borderRadius: 28 },
+  
   skeletonMainCard: { width: '100%', height: 210, borderRadius: 32, marginBottom: 36 },
 });

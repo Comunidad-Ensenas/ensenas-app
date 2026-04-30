@@ -6,10 +6,18 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 interface UserData {
   id: number;
   firstName: string;
+  lastName: string | null;
   streakDays: number;
   dailyGoalMinutes: number;
   xpEarnedToday: number;
   currentMinutesToday: number;
+  isLeftHanded: boolean;
+  learningMotivation: string | null;
+  experienceLevel: string | null;
+  avatarSkinTone: string | null;
+  hapticFeedback: boolean;
+  reminderTime: string | null;
+  birthdate: string | null;
 }
 
 interface UserContextType {
@@ -42,10 +50,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         setUserData({
           id: user.id,
           firstName: user.firstName,
+          lastName: user.lastName,
           streakDays: user.currentStreak || 0,
           dailyGoalMinutes: user.dailyGoalMinutes || 5,
           xpEarnedToday: todayActivity?.xpEarned || 0,
           currentMinutesToday: 0,
+          isLeftHanded: user.isLeftHanded ?? false,
+          learningMotivation: user.learningMotivation,
+          experienceLevel: user.experienceLevel,
+          avatarSkinTone: user.avatarSkinTone,
+          hapticFeedback: user.hapticFeedback ?? true,
+          reminderTime: user.reminderTime,
+          birthdate: user.birthdate,
         });
       }
     } catch (error) {
