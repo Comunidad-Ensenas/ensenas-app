@@ -1,6 +1,6 @@
 import { CustomTabBar } from '@/components/navigation/CustomTabBar';
 import { Tabs } from 'expo-router';
-import { ChatBubble, PeaceHand, ShareAndroid, VideoCamera } from 'iconoir-react-native';
+import { BookStack, ChatBubble, PeaceHand, ShareAndroid, VideoCamera } from 'iconoir-react-native';
 import React from 'react';
 
 export default function StudioTabsLayout() {
@@ -31,6 +31,13 @@ export default function StudioTabsLayout() {
           title: 'Frases',
           tabBarIcon: ({ color }) => <ChatBubble width={24} height={24} color={color} strokeWidth={2} />
         }}
+      />
+      <Tabs.Screen 
+        name="modules" 
+        options={{ 
+          title: 'Módulos',
+          tabBarIcon: ({ color }) => <BookStack width={24} height={24} color={color} strokeWidth={2} />
+        }} 
       />
       <Tabs.Screen
         name="export"
