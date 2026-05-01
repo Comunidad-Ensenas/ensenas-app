@@ -7,8 +7,7 @@ import { phrases, signs } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { router } from 'expo-router';
-import { ChatBubble, Check, NavArrowLeft, Plus, Search, VideoCamera, Xmark } from 'iconoir-react-native';
+import { ChatBubble, Check, Plus, Search, VideoCamera, Xmark } from 'iconoir-react-native';
 import React, { useCallback, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -131,16 +130,9 @@ export default function StudioModuleScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       
       <View style={styles.header}>
-        <IconButton 
-          icon={<NavArrowLeft width={24} height={24} color={colors.text} strokeWidth={2.5} />} 
-          onPress={() => router.back()} 
-          backgroundColor={colors.surface}
-          size={44}
-        />
         <View style={styles.headerTitleContainer}>
           <Typography variant="h3">Crear Módulo</Typography>
         </View>
-        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
