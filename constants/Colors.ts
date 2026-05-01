@@ -1,6 +1,6 @@
 export const BrandColors = {
-  deepSkyBlue: '#4CB5FF', // Ligeramente más saturado para destacar
-  powderBlush: '#FF9B93', // Más cálido y vivo
+  deepSkyBlue: '#4CB5FF',
+  powderBlush: '#FF9B93',
   berryCrush: '#B84A6E',
   charcoalBrown: '#2A2C29',
 };
@@ -24,7 +24,6 @@ export const Colors = {
     dangerBg: 'rgba(184, 74, 110, 0.15)',
     contrastCard: BrandColors.charcoalBrown,
     palette: BrandColors,
-    // Colores específicos para las tarjetas sólidas
     cardText: '#FFFFFF', 
   },
   dark: {
@@ -43,7 +42,6 @@ export const Colors = {
     dangerBg: 'rgba(184, 74, 110, 0.2)',
     contrastCard: '#1E1E1E',
     palette: BrandColors,
-    // Colores específicos para las tarjetas sólidas
-    cardText: '#111418', // Texto oscuro sobre pasteles en dark mode para mayor contraste
+    cardText: '#111418',
   },
 };

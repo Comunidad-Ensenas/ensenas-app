@@ -44,7 +44,6 @@ export default function ProfileScreen() {
   const [skinTone, setSkinTone] = useState('#E3BA9A');
   const [reminderTime, setReminderTime] = useState('');
 
-  // ESTO ARREGLA LA ACTUALIZACIÓN: Refresca los datos cuando la pantalla gana el foco
   useFocusEffect(
     useCallback(() => {
       refreshUserData();

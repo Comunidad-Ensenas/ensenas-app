@@ -39,7 +39,6 @@ export default function EditProfileScreen() {
   const [dailyGoalMinutes, setDailyGoalMinutes] = useState(5);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Obliga a refrescar los datos cada vez que se abre la pantalla de editar
   useFocusEffect(
     useCallback(() => {
       refreshUserData();
@@ -149,7 +148,6 @@ export default function EditProfileScreen() {
     }
   };
 
-  // Previene que se dibuje el formulario vacío si los datos aún no llegan
   if (isLoading) {
     return <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} />;
   }
