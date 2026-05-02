@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Camera, Check, NavArrowLeft, Pause, Plus, Search, Settings, Xmark } from 'iconoir-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -30,6 +31,7 @@ export default function StudioCaptureScreen() {
   const palette = (colors as any).palette;
   const { hasPermission, requestPermission } = useCameraPermission();
   const isFocused = useIsFocused();
+  const { signId } = useLocalSearchParams<{ signId?: string }>();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConfigSelectorOpen, setIsConfigSelectorOpen] = useState(false);
@@ -44,6 +46,7 @@ export default function StudioCaptureScreen() {
 
   const [isRecording, setIsRecording] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [originalFrames, setOriginalFrames] = useState<any[] | null>(null);
 
   const [serverUrl, setServerUrl] = useState('');
   const serverRef = useRef<any>(null);
@@ -55,10 +58,9 @@ export default function StudioCaptureScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const fetchAllConfigs = async () => {
+      const fetchData = async () => {
         try {
           const dbConfigs = await db.select().from(manualConfigurations);
-
           const localDataStr = await AsyncStorage.getItem('@ensenas_manual_configs');
           const localData = localDataStr ? JSON.parse(localDataStr) : [];
 
@@ -73,12 +75,36 @@ export default function StudioCaptureScreen() {
 
           const combinedConfigs = [...formattedLocalConfigs, ...dbConfigs];
           setAvailableConfigs(combinedConfigs);
+
+          if (signId) {
+            const storedSignsStr = await AsyncStorage.getItem('@ensenas_recorded_signs');
+            const storedSigns = storedSignsStr ? JSON.parse(storedSignsStr) : [];
+            const signToEdit = storedSigns.find((s: any) => s.timestamp === signId);
+
+            if (signToEdit) {
+              setMeaningsList(signToEdit.meanings || []);
+              setOriginalFrames(signToEdit.frames);
+              
+              const domConfig = combinedConfigs.find(c => c.id === signToEdit.configHandDominantId || c.id === `local_${signToEdit.configHandDominantId}`);
+              if (domConfig) setSelectedDominantConfig(domConfig);
+
+              if (signToEdit.configHandRecessiveId) {
+                const recConfig = combinedConfigs.find(c => c.id === signToEdit.configHandRecessiveId || c.id === `local_${signToEdit.configHandRecessiveId}`);
+                if (recConfig) setSelectedRecessiveConfig(recConfig);
+              }
+            }
+          } else {
+            setMeaningsList([]);
+            setSelectedDominantConfig(null);
+            setSelectedRecessiveConfig(null);
+            setOriginalFrames(null);
+          }
         } catch (e) {
           console.error(e);
         }
       };
-      fetchAllConfigs();
-    }, [])
+      fetchData();
+    }, [signId])
   );
 
   useEffect(() => {
@@ -87,7 +113,6 @@ export default function StudioCaptureScreen() {
     const setupOfflineServer = async () => {
       try {
         const wwwPath = FileSystem.documentDirectory + 'www/';
-
         const dirInfo = await FileSystem.getInfoAsync(wwwPath);
         if (dirInfo.exists) {
           await FileSystem.deleteAsync(wwwPath, { idempotent: true });
@@ -97,7 +122,6 @@ export default function StudioCaptureScreen() {
         for (const item of assetsToLoad) {
           const asset = Asset.fromModule(item.module);
           await asset.downloadAsync();
-
           await FileSystem.copyAsync({
             from: asset.localUri || asset.uri,
             to: wwwPath + item.name
@@ -105,12 +129,7 @@ export default function StudioCaptureScreen() {
         }
 
         const serverPath = wwwPath.replace(/^file:\/\//, '');
-
-        const server = new StaticServer({
-          port: 0,
-          fileDir: serverPath,
-        });
-
+        const server = new StaticServer({ port: 0, fileDir: serverPath });
         const rawUrl = await server.start();
         const safeUrl = rawUrl.endsWith('/') ? rawUrl : rawUrl + '/';
 
@@ -127,26 +146,21 @@ export default function StudioCaptureScreen() {
 
     return () => {
       isMounted = false;
-      if (serverRef.current) {
-        serverRef.current.stop();
-      }
+      if (serverRef.current) serverRef.current.stop();
     };
   }, []);
 
   const onMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-
       if (data.status === 'READY') {
         setIsReady(true);
         return;
       }
-
       if (data.error) {
         Alert.alert("Alerta de IA", data.error);
         return;
       }
-
       if (isRecording) {
         framesBuffer.current.push({
           timestamp: Date.now(),
@@ -168,6 +182,32 @@ export default function StudioCaptureScreen() {
 
   const handleRemoveMeaning = (meaningToRemove: string) => {
     setMeaningsList(meaningsList.filter(m => m !== meaningToRemove));
+  };
+
+  const saveEditedMetadataOnly = async () => {
+    if (!selectedDominantConfig || meaningsList.length === 0) return;
+    
+    try {
+      const storedData = await AsyncStorage.getItem('@ensenas_recorded_signs');
+      let currentData = storedData ? JSON.parse(storedData) : [];
+      
+      const updatedSign = {
+        configHandDominantId: selectedDominantConfig.id,
+        configHandRecessiveId: selectedRecessiveConfig?.id || null,
+        meanings: meaningsList,
+        frames: originalFrames,
+        timestamp: signId
+      };
+
+      currentData = currentData.map((s: any) => s.timestamp === signId ? updatedSign : s);
+      await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify(currentData));
+      
+      Alert.alert("Actualizado", "Los detalles de la seña se han guardado.", [
+        { text: "OK", onPress: () => router.back() }
+      ]);
+    } catch (e) {
+      Alert.alert("Error", "Ocurrió un problema al actualizar la seña.");
+    }
   };
 
   const toggleRecording = async () => {
@@ -192,19 +232,26 @@ export default function StudioCaptureScreen() {
             configHandRecessiveId: selectedRecessiveConfig?.id || null,
             meanings: meaningsList,
             frames: framesToSave,
-            timestamp: new Date().toISOString()
+            timestamp: signId || new Date().toISOString()
           };
 
           const storedData = await AsyncStorage.getItem('@ensenas_recorded_signs');
-          const currentData = storedData ? JSON.parse(storedData) : [];
-          await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify([...currentData, newSign]));
+          let currentData = storedData ? JSON.parse(storedData) : [];
 
-          Alert.alert("Bien hecho", "El movimiento se guardó correctamente.");
-
-          setMeaningsList([]);
-          setCurrentMeaning('');
-          setSelectedDominantConfig(null);
-          setSelectedRecessiveConfig(null);
+          if (signId) {
+            currentData = currentData.map((s: any) => s.timestamp === signId ? newSign : s);
+            await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify(currentData));
+            Alert.alert("Seña Actualizada", "El nuevo movimiento y detalles se guardaron correctamente.", [
+              { text: "OK", onPress: () => router.back() }
+            ]);
+          } else {
+            await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify([...currentData, newSign]));
+            Alert.alert("Bien hecho", "El movimiento se guardó correctamente.");
+            setMeaningsList([]);
+            setCurrentMeaning('');
+            setSelectedDominantConfig(null);
+            setSelectedRecessiveConfig(null);
+          }
         } catch (e) {
           Alert.alert("Error", "Ocurrió un problema al guardar la seña.");
         }
@@ -385,7 +432,7 @@ export default function StudioCaptureScreen() {
 
       <View style={styles.header}>
         <View style={styles.headerTitleContainer}>
-          <Typography variant="h3">Grabar Seña</Typography>
+          <Typography variant="h3">{signId ? 'Editar Seña' : 'Grabar Seña'}</Typography>
         </View>
       </View>
 
@@ -469,7 +516,7 @@ export default function StudioCaptureScreen() {
           <Card style={[styles.dialogCard, { backgroundColor: colors.background, maxHeight: '90%' }]}>
 
             <View style={styles.dialogHeader}>
-              <Typography variant="h2">Detalles de la Seña</Typography>
+              <Typography variant="h2">{signId ? 'Editar Detalles' : 'Detalles de la Seña'}</Typography>
               <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsSettingsOpen(false)} />
             </View>
 
@@ -531,15 +578,25 @@ export default function StudioCaptureScreen() {
 
             </ScrollView>
 
-            <View style={[styles.dialogFooter, { borderTopColor: colors.border }]}>
+            <View style={[styles.dialogFooter, { borderTopColor: colors.border, flexDirection: 'column', gap: 12 }]}>
+              {signId && (
+                <Button
+                  title="Guardar Solo Textos"
+                  color={colors.surface}
+                  textColor={colors.text}
+                  onPress={saveEditedMetadataOnly}
+                  disabled={!isFormValid}
+                  style={{ borderWidth: 1, borderColor: colors.border, opacity: !isFormValid ? 0.6 : 1 }}
+                />
+              )}
               <Button
-                title="Confirmar"
+                title={signId ? "Listo para Regrabar" : "Confirmar Detalles"}
                 color={palette.deepSkyBlue}
                 textColor="#FFFFFF"
                 icon={<Check width={20} height={20} color="#FFFFFF" strokeWidth={2.5} />}
                 onPress={() => setIsSettingsOpen(false)}
                 disabled={!isFormValid}
-                style={{ flex: 1, opacity: !isFormValid ? 0.6 : 1 }}
+                style={{ opacity: !isFormValid ? 0.6 : 1 }}
               />
             </View>
           </Card>
@@ -642,7 +699,7 @@ const styles = StyleSheet.create({
   chipsWrapContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingLeft: 14, paddingRight: 8, borderRadius: 20, gap: 8 },
   chipRemoveBtn: { padding: 4, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.2)' },
-  dialogFooter: { flexDirection: 'row', padding: 24, paddingTop: 16, borderTopWidth: 1 },
+  dialogFooter: { padding: 24, paddingTop: 16, borderTopWidth: 1 },
   searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, gap: 10 },
   searchInput: { flex: 1, fontSize: 16, fontWeight: '500' },
   configListItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1 },

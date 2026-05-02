@@ -1,419 +1,572 @@
+import { Button } from '@/components/common/Button';
+import { Card } from '@/components/common/Card';
+import { IconBox } from '@/components/common/IconBox';
+import { IconButton } from '@/components/common/IconButton';
+import { SectionHeader } from '@/components/common/SectionHeader';
+import { Typography } from '@/components/common/Typography';
 import { useTheme } from '@/hooks/useTheme';
-import { MaterialIcons } from '@expo/vector-icons';
+import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-import React, { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
+import { BookStack, ChatBubble, CloudUpload, DragHandGesture, Edit, NavArrowRight, Trash, VideoCamera, Xmark } from 'iconoir-react-native';
+import React, { useCallback, useState } from 'react';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function StudioExportScreen() {
   const { colors, isDark } = useTheme();
+  const palette = (colors as any).palette;
   
-  const [sessionStats, setSessionStats] = useState({ manualConfigsCount: 0, recordedSignsCount: 0 });
-  const [persistedData, setPersistedData] = useState({ manualConfigs: [], recordedSigns: [] });
-  
-  const [isDataModalOpen, setIsDataModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [selectedSignMeanings, setSelectedSignMeanings] = useState<string[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isExplorerOpen, setIsExplorerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'configs' | 'signs' | 'phrases' | 'modules'>('configs');
 
-  useFocusEffect(
-    React.useCallback(() => {
-      const loadPersistedData = async () => {
-        try {
-          const storedConfigs = await AsyncStorage.getItem('@ensenas_manual_configs');
-          const storedSigns = await AsyncStorage.getItem('@ensenas_recorded_signs');
-          
-          const parsedConfigs = storedConfigs ? JSON.parse(storedConfigs) : [];
-          const parsedSigns = storedSigns ? JSON.parse(storedSigns) : [];
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [selectedItemType, setSelectedItemType] = useState<'sign' | 'phrase' | 'module' | null>(null);
 
-          setSessionStats({ manualConfigsCount: parsedConfigs.length, recordedSignsCount: parsedSigns.length });
-          setPersistedData({ manualConfigs: parsedConfigs, recordedSigns: parsedSigns });
-        } catch (e) {}
-      };
-      loadPersistedData();
-    }, [])
-  );
+  const [data, setData] = useState({
+    configs: [] as any[],
+    signs: [] as any[],
+    phrases: [] as any[],
+    modules: [] as any[]
+  });
 
-  const handleDataExport = async () => {
-    if (sessionStats.manualConfigsCount === 0 && sessionStats.recordedSignsCount === 0) {
-      Alert.alert("Vacio", "No hay informacion para compartir todavia.");
-      return;
-    }
-
+  const loadData = async () => {
     try {
-      const exportPayload = {
-        metadata: {
-          exportDate: new Date().toISOString(),
-        },
-        manualConfigs: persistedData.manualConfigs,
-        recordedSigns: persistedData.recordedSigns 
-      };
+      const [c, s, p, m] = await Promise.all([
+        AsyncStorage.getItem('@ensenas_manual_configs'),
+        AsyncStorage.getItem('@ensenas_recorded_signs'),
+        AsyncStorage.getItem('@ensenas_recorded_phrases'),
+        AsyncStorage.getItem('@ensenas_recorded_modules')
+      ]);
 
-      const jsonPayload = JSON.stringify(exportPayload, null, 2);
-      const fileUri = `${FileSystem.documentDirectory}dataset_ensenas.json`;
-      
-      await FileSystem.writeAsStringAsync(fileUri, jsonPayload, {
-        encoding: FileSystem.EncodingType.UTF8,
+      setData({
+        configs: c ? JSON.parse(c) : [],
+        signs: s ? JSON.parse(s) : [],
+        phrases: p ? JSON.parse(p) : [],
+        modules: m ? JSON.parse(m) : []
       });
-
-      const isAvailable = await Sharing.isAvailableAsync();
-      
-      if (isAvailable) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'application/json',
-          dialogTitle: 'Compartir Dataset',
-          UTI: 'public.json'
-        });
-      } else {
-        Alert.alert("Error", "No se puede compartir archivos en este dispositivo.");
-      }
-    } catch (error) {
-      Alert.alert("Error", "No se pudo preparar el archivo para compartir.");
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const handleClearData = () => {
-    if (sessionStats.manualConfigsCount === 0 && sessionStats.recordedSignsCount === 0) {
-      Alert.alert("Vacio", "Ya no hay datos guardados en el telefono.");
+  useFocusEffect(useCallback(() => { loadData(); }, []));
+
+  const getConfigName = (idToFind: string) => {
+    if (!idToFind) return 'Ninguna';
+    const config = data.configs.find(c => c.timestamp === idToFind || `local_${c.timestamp}` === idToFind);
+    return config?.name || 'Configuración eliminada';
+  };
+
+  const getSignName = (idToFind: string) => {
+    if (!idToFind) return 'Desconocida';
+    const sign = data.signs.find(s => s.timestamp === idToFind || `local_sign_${s.timestamp}` === idToFind);
+    return sign?.meanings?.[0] || 'Seña eliminada';
+  };
+
+  const getPhraseName = (idToFind: string) => {
+    if (!idToFind) return 'Desconocida';
+    const phrase = data.phrases.find(p => p.id === idToFind);
+    return phrase?.spanishTranslation || 'Frase eliminada';
+  };
+
+  const handleSyncToSupabase = async () => {
+    const totalItems = data.configs.length + data.signs.length + data.phrases.length + data.modules.length;
+    if (totalItems === 0) {
+      Alert.alert("Vacío", "No hay datos para sincronizar.");
       return;
     }
 
-    Alert.alert(
-      "¿Borrar todo?",
-      "Asegurese de haber compartido el archivo primero. Esta accion eliminara todas las configuraciones manuales y señas guardadas.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Borrar Todo",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await AsyncStorage.multiRemove(['@ensenas_manual_configs', '@ensenas_recorded_signs']);
-              setSessionStats({ manualConfigsCount: 0, recordedSignsCount: 0 });
-              setPersistedData({ manualConfigs: [], recordedSigns: [] });
-              Alert.alert("Listo", "El almacenamiento ha sido limpiado.");
-            } catch (e) {
-              Alert.alert("Error", "No se pudo limpiar el almacenamiento.");
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleDeleteManualConfig = (timestampToRemove: string) => {
-    Alert.alert(
-      "¿Borrar configuración?",
-      "Se eliminara esta configuracion manual. Las señas que la usan no se borraran, pero quedaran huerfanas.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Borrar",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const updatedConfigs = persistedData.manualConfigs.filter((c: any) => c.timestamp !== timestampToRemove);
-              await AsyncStorage.setItem('@ensenas_manual_configs', JSON.stringify(updatedConfigs));
-              setPersistedData({ ...persistedData, manualConfigs: updatedConfigs });
-              setSessionStats({ ...sessionStats, manualConfigsCount: updatedConfigs.length });
-            } catch (e) {
-              Alert.alert("Error", "No se pudo borrar la configuracion.");
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleDeleteRecordedSign = (timestampToRemove: string) => {
-    Alert.alert(
-      "¿Borrar seña?",
-      "Esta accion no se puede deshacer.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Borrar",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const updatedSigns = persistedData.recordedSigns.filter((s: any) => s.timestamp !== timestampToRemove);
-              await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify(updatedSigns));
-              setPersistedData({ ...persistedData, recordedSigns: updatedSigns });
-              setSessionStats({ ...sessionStats, recordedSignsCount: updatedSigns.length });
-            } catch (e) {
-              Alert.alert("Error", "No se pudo borrar la seña.");
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleOpenDetails = (meanings: string[]) => {
-    setSelectedSignMeanings(meanings);
-    setIsDetailsModalOpen(true);
-  };
-
-  const formatDate = (isoString: string) => {
-    if (!isoString) return '';
-    const date = new Date(isoString);
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${day}/${month} - ${hours}:${minutes}`;
-  };
-
-  const lowerQuery = searchQuery.toLowerCase();
-  
-  const filteredConfigs = persistedData.manualConfigs.filter((config: any) => 
-    config.name && config.name.toLowerCase().includes(lowerQuery)
-  );
-
-  const filteredSigns = persistedData.recordedSigns.filter((sign: any) => 
-    (sign.manualConfig && sign.manualConfig.toLowerCase().includes(lowerQuery)) ||
-    (sign.meanings && sign.meanings.some((m: string) => m.toLowerCase().includes(lowerQuery)))
-  );
-
-  const groupedFilteredSigns = filteredSigns.reduce((acc: any, sign: any) => {
-    const configName = sign.manualConfig || 'Desconocida';
-    if (!acc[configName]) {
-      acc[configName] = [];
+    setIsSyncing(true);
+    try {
+      if (data.configs.length > 0) {
+        const configsPayload = data.configs.map(c => ({ local_timestamp: c.timestamp, name: c.name, landmarks: c.landmarks }));
+        const { error } = await supabase.from('raw_manual_configs').upsert(configsPayload, { onConflict: 'local_timestamp' });
+        if (error) throw error;
+      }
+      if (data.signs.length > 0) {
+        const signsPayload = data.signs.map(s => ({ local_timestamp: s.timestamp, config_hand_dominant_id: s.configHandDominantId, config_hand_recessive_id: s.configHandRecessiveId, meanings: s.meanings, frames: s.frames }));
+        const { error } = await supabase.from('raw_signs').upsert(signsPayload, { onConflict: 'local_timestamp' });
+        if (error) throw error;
+      }
+      if (data.phrases.length > 0) {
+        const phrasesPayload = data.phrases.map(p => ({ local_id: p.id, spanish_translation: p.spanishTranslation, lsv_gloss: p.lsvGloss, description: p.description, signs_list: p.signs }));
+        const { error } = await supabase.from('raw_phrases').upsert(phrasesPayload, { onConflict: 'local_id' });
+        if (error) throw error;
+      }
+      if (data.modules.length > 0) {
+        const modulesPayload = data.modules.map(m => ({ local_id: m.id, title: m.title, description: m.description, difficulty_level: m.difficultyLevel, items_list: m.items }));
+        const { error } = await supabase.from('raw_modules').upsert(modulesPayload, { onConflict: 'local_id' });
+        if (error) throw error;
+      }
+      Alert.alert("¡Éxito!", "Todos los datos han sido sincronizados en Supabase.");
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Ocurrió un problema subiendo los datos.");
+    } finally {
+      setIsSyncing(false);
     }
-    acc[configName].push(sign);
-    return acc;
-  }, {});
+  };
+
+  const saveAllData = async (newData: typeof data) => {
+    await Promise.all([
+      AsyncStorage.setItem('@ensenas_manual_configs', JSON.stringify(newData.configs)),
+      AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify(newData.signs)),
+      AsyncStorage.setItem('@ensenas_recorded_phrases', JSON.stringify(newData.phrases)),
+      AsyncStorage.setItem('@ensenas_recorded_modules', JSON.stringify(newData.modules))
+    ]);
+    setData(newData);
+  };
+
+  const executeCascadeDelete = async (type: 'config' | 'sign' | 'phrase' | 'module', targetId: string) => {
+    let { configs, signs, phrases, modules } = data;
+    let deletedSignIds = new Set<string>();
+    let deletedPhraseIds = new Set<string>();
+
+    if (type === 'config') {
+      configs = configs.filter(c => c.timestamp !== targetId);
+      signs.forEach(s => {
+        if (
+          s.configHandDominantId === targetId || s.configHandRecessiveId === targetId ||
+          s.configHandDominantId === `local_${targetId}` || s.configHandRecessiveId === `local_${targetId}`
+        ) {
+          deletedSignIds.add(s.timestamp);
+        }
+      });
+      signs = signs.filter(s => !deletedSignIds.has(s.timestamp));
+    }
+
+    if (type === 'sign') {
+      deletedSignIds.add(targetId);
+      signs = signs.filter(s => !deletedSignIds.has(s.timestamp));
+    }
+
+    if (deletedSignIds.size > 0 || type === 'phrase') {
+      if (type === 'phrase') deletedPhraseIds.add(targetId);
+
+      phrases = phrases.map(p => {
+        const keptSigns = p.signs.filter((s: any) => {
+          let isDeleted = false;
+          deletedSignIds.forEach(delId => {
+            if (s.signId === delId || s.signId === `local_sign_${delId}`) isDeleted = true;
+          });
+          return !isDeleted;
+        });
+        return { ...p, signs: keptSigns };
+      }).filter(p => {
+        if (p.signs.length === 0) deletedPhraseIds.add(p.id);
+        if (type === 'phrase' && p.id === targetId) deletedPhraseIds.add(p.id);
+        return p.signs.length > 0 && p.id !== targetId;
+      });
+    }
+
+    if (deletedSignIds.size > 0 || deletedPhraseIds.size > 0 || type === 'module') {
+      modules = modules.map(m => {
+        const keptItems = m.items.filter((item: any) => {
+          if (item.itemType === 'sign') {
+            let isDeleted = false;
+            deletedSignIds.forEach(delId => {
+              if (item.itemId === delId || item.itemId === `local_sign_${delId}`) isDeleted = true;
+            });
+            return !isDeleted;
+          }
+          if (item.itemType === 'phrase') {
+            return !deletedPhraseIds.has(item.itemId);
+          }
+          return true;
+        });
+        return { ...m, items: keptItems };
+      });
+      
+      if (type === 'module') {
+        modules = modules.filter(m => m.id !== targetId);
+      }
+    }
+
+    await saveAllData({ configs, signs, phrases, modules });
+    setIsDetailOpen(false);
+  };
+
+  const handleDeleteConfig = (timestamp: string) => {
+    Alert.alert("¿Borrar Configuración?", "Se eliminarán en cascada TODAS las señas, frases y módulos que dependan de esta configuración para evitar corromper los datos.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Borrar en Cascada", style: "destructive", onPress: () => executeCascadeDelete('config', timestamp) }
+    ]);
+  };
+
+  const handleDeleteSign = (signId: string) => {
+    Alert.alert("¿Borrar Seña?", "Se eliminará también de las Frases y Módulos que la utilicen.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Borrar en Cascada", style: "destructive", onPress: () => executeCascadeDelete('sign', signId) }
+    ]);
+  };
+
+  const handleDeletePhrase = (phraseId: string) => {
+    Alert.alert("¿Borrar Frase?", "Se eliminará también de los Módulos que la utilicen.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Borrar en Cascada", style: "destructive", onPress: () => executeCascadeDelete('phrase', phraseId) }
+    ]);
+  };
+
+  const handleDeleteModule = (moduleId: string) => {
+    Alert.alert("¿Borrar Módulo?", "Solo se borrará el módulo, el contenido seguirá existiendo.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Borrar", style: "destructive", onPress: () => executeCascadeDelete('module', moduleId) }
+    ]);
+  };
+
+  const handleClearAll = () => {
+    Alert.alert("⚠️ PELIGRO: Borrar Todo", "Esto eliminará permanentemente todo tu trabajo local.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sí, destruir datos", style: "destructive", onPress: async () => {
+          await saveAllData({ configs: [], signs: [], phrases: [], modules: [] });
+          Alert.alert("Listo", "Almacenamiento local formateado.");
+      }}
+    ]);
+  };
+
+  const openDetails = (item: any, type: 'sign' | 'phrase' | 'module') => {
+    setSelectedItem(item);
+    setSelectedItemType(type);
+    setIsDetailOpen(true);
+  };
+
+  const handleEditItem = () => {
+    setIsDetailOpen(false);
+    setIsExplorerOpen(false);
+    
+    if (selectedItemType === 'module') {
+      router.push({ pathname: './modules', params: { moduleId: selectedItem.id } } as any);
+    } else if (selectedItemType === 'phrase') {
+      router.push({ pathname: '/phrases', params: { phraseId: selectedItem.id } } as any);
+    } else if (selectedItemType === 'sign') {
+      router.push({ pathname: '/capture', params: { signId: selectedItem.timestamp } } as any);
+    }
+  };
+
+  const renderExplorerList = () => {
+    switch (activeTab) {
+      case 'configs':
+        return data.configs.map((item, index) => (
+          <View key={item.timestamp} style={[styles.listItem, { backgroundColor: colors.surface }]}>
+            <Typography variant="label" color={colors.textSecondary} style={{ width: 24 }}>#{index + 1}</Typography>
+            <IconBox size={44} icon={<DragHandGesture width={24} height={24} color={palette.deepSkyBlue} />} backgroundColor={palette.deepSkyBlue + '20'} style={{ marginHorizontal: 12 }} />
+            <View style={{ flex: 1 }}>
+              <Typography variant="body" style={{ fontWeight: '800' }}>{item.name}</Typography>
+            </View>
+            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteConfig(item.timestamp)} />
+          </View>
+        ));
+      case 'signs':
+        return data.signs.map((item, index) => (
+          <View key={item.timestamp} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
+            <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'sign')}>
+              <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
+              <IconBox size={44} icon={<VideoCamera width={24} height={24} color={colors.success} />} backgroundColor={colors.successBg} style={{ marginHorizontal: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Typography variant="body" style={{ fontWeight: '800' }}>{item.meanings?.[0] || 'Sin Nombre'}</Typography>
+                <Typography variant="label" color={colors.textSecondary}>{item.meanings?.length} significado(s)</Typography>
+              </View>
+              <NavArrowRight width={24} height={24} color={colors.icon} />
+            </Pressable>
+            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteSign(item.timestamp)} style={{ marginLeft: 8, marginRight: 8 }} />
+          </View>
+        ));
+      case 'phrases':
+        return data.phrases.map((item, index) => (
+          <View key={item.id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
+            <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'phrase')}>
+              <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
+              <IconBox size={44} icon={<ChatBubble width={24} height={24} color={palette.powderBlush} />} backgroundColor={palette.powderBlush + '20'} style={{ marginHorizontal: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Typography variant="body" style={{ fontWeight: '800' }}>{item.spanishTranslation}</Typography>
+                <Typography variant="label" color={colors.textSecondary}>{item.signs?.length || 0} señas en secuencia</Typography>
+              </View>
+              <NavArrowRight width={24} height={24} color={colors.icon} />
+            </Pressable>
+            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeletePhrase(item.id)} style={{ marginLeft: 8, marginRight: 8 }} />
+          </View>
+        ));
+      case 'modules':
+        return data.modules.map((item, index) => (
+          <View key={item.id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
+            <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'module')}>
+              <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
+              <IconBox size={44} icon={<BookStack width={24} height={24} color={palette.berryCrush} />} backgroundColor={palette.berryCrush + '20'} style={{ marginHorizontal: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Typography variant="body" style={{ fontWeight: '800' }}>{item.title}</Typography>
+                <Typography variant="label" color={colors.textSecondary}>Nivel {item.difficultyLevel} • {item.items?.length || 0} elementos</Typography>
+              </View>
+              <NavArrowRight width={24} height={24} color={colors.icon} />
+            </Pressable>
+            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteModule(item.id)} style={{ marginLeft: 8, marginRight: 8 }} />
+          </View>
+        ));
+    }
+  };
+
+  const renderDetailContent = () => {
+    if (!selectedItem) return null;
+
+    if (selectedItemType === 'sign') {
+      return (
+        <>
+          <View style={styles.detailGroup}>
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>SIGNIFICADOS</Typography>
+            <Typography variant="body">{selectedItem.meanings?.join(', ')}</Typography>
+          </View>
+          <View style={styles.detailGroup}>
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>CONFIGURACIÓN (MANO DOMINANTE)</Typography>
+            <View style={[styles.relationPill, { backgroundColor: palette.deepSkyBlue + '15' }]}>
+              <DragHandGesture width={20} height={20} color={palette.deepSkyBlue} />
+              <Typography variant="body" color={palette.deepSkyBlue} style={{ fontWeight: '700', flex: 1 }}>
+                {getConfigName(selectedItem.configHandDominantId)}
+              </Typography>
+            </View>
+          </View>
+          {selectedItem.configHandRecessiveId && (
+            <View style={styles.detailGroup}>
+              <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>CONFIGURACIÓN (MANO RECESIVA)</Typography>
+              <View style={[styles.relationPill, { backgroundColor: palette.deepSkyBlue + '15' }]}>
+                <DragHandGesture width={20} height={20} color={palette.deepSkyBlue} />
+                <Typography variant="body" color={palette.deepSkyBlue} style={{ fontWeight: '700', flex: 1 }}>
+                  {getConfigName(selectedItem.configHandRecessiveId)}
+                </Typography>
+              </View>
+            </View>
+          )}
+        </>
+      );
+    }
+
+    if (selectedItemType === 'phrase') {
+      return (
+        <>
+          <View style={styles.detailGroup}>
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>GLOSA LSV</Typography>
+            <Typography variant="body">{selectedItem.lsvGloss}</Typography>
+          </View>
+          <View style={styles.detailGroup}>
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>SECUENCIA DE SEÑAS ({selectedItem.signs?.length})</Typography>
+            {selectedItem.signs?.map((s: any, idx: number) => (
+              <View key={idx} style={[styles.relationPill, { backgroundColor: colors.successBg, marginBottom: 8 }]}>
+                <Typography variant="body" color={colors.success} style={{ fontWeight: '800' }}>{idx + 1}.</Typography>
+                <VideoCamera width={20} height={20} color={colors.success} />
+                <Typography variant="body" color={colors.success} style={{ fontWeight: '700', flex: 1 }}>
+                  {getSignName(s.signId)}
+                </Typography>
+              </View>
+            ))}
+          </View>
+        </>
+      );
+    }
+
+    if (selectedItemType === 'module') {
+      return (
+        <>
+          <View style={styles.detailGroup}>
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>DESCRIPCIÓN</Typography>
+            <Typography variant="body">{selectedItem.description || 'Sin descripción'}</Typography>
+          </View>
+          <View style={styles.detailGroup}>
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>CONTENIDO DEL MÓDULO ({selectedItem.items?.length})</Typography>
+            {selectedItem.items?.sort((a:any, b:any) => a.orderIndex - b.orderIndex).map((item: any, idx: number) => {
+              const isSign = item.itemType === 'sign';
+              const tintColor = isSign ? colors.success : palette.powderBlush;
+              const bgTint = isSign ? colors.successBg : palette.powderBlush + '15';
+              const itemName = isSign ? getSignName(item.itemId) : getPhraseName(item.itemId);
+              
+              return (
+                <View key={idx} style={[styles.relationPill, { backgroundColor: bgTint, marginBottom: 8 }]}>
+                  <Typography variant="body" color={tintColor} style={{ fontWeight: '800' }}>{idx + 1}.</Typography>
+                  {isSign ? <VideoCamera width={20} height={20} color={tintColor} /> : <ChatBubble width={20} height={20} color={tintColor} />}
+                  <Typography variant="body" color={tintColor} style={{ fontWeight: '700', flex: 1 }}>
+                    {itemName} <Typography variant="label" style={{ opacity: 0.7 }}>({isSign ? 'Seña' : 'Frase'})</Typography>
+                  </Typography>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      
       <View style={styles.header}>
-        <Text style={[styles.headerText, { color: colors.text }]}>Compartir Trabajo</Text>
+        <View style={styles.headerTitleContainer}>
+          <Typography variant="h3">Datos</Typography>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.infoSection}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Resumen de la sesion</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-            Informacion que ha sido guardada en este telefono.
-          </Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        
+        <View style={styles.statsContainer}>
+          <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <IconBox size={44} icon={<DragHandGesture width={24} height={24} color={palette.deepSkyBlue} />} backgroundColor={palette.deepSkyBlue + '15'} />
+            <Typography variant="h2" style={{ marginTop: 12 }}>{data.configs.length}</Typography>
+            <Typography variant="label" color={colors.textSecondary} style={{ marginTop: 4 }}>Configuraciones</Typography>
+          </View>
+
+          <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <IconBox size={44} icon={<VideoCamera width={24} height={24} color={colors.success} />} backgroundColor={colors.successBg} />
+            <Typography variant="h2" style={{ marginTop: 12 }}>{data.signs.length}</Typography>
+            <Typography variant="label" color={colors.textSecondary} style={{ marginTop: 4 }}>Señas</Typography>
+          </View>
+
+          <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <IconBox size={44} icon={<ChatBubble width={24} height={24} color={palette.powderBlush} />} backgroundColor={palette.powderBlush + '15'} />
+            <Typography variant="h2" style={{ marginTop: 12 }}>{data.phrases.length}</Typography>
+            <Typography variant="label" color={colors.textSecondary} style={{ marginTop: 4 }}>Frases</Typography>
+          </View>
+
+          <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <IconBox size={44} icon={<BookStack width={24} height={24} color={palette.berryCrush} />} backgroundColor={palette.berryCrush + '15'} />
+            <Typography variant="h2" style={{ marginTop: 12 }}>{data.modules.length}</Typography>
+            <Typography variant="label" color={colors.textSecondary} style={{ marginTop: 4 }}>Módulos</Typography>
+          </View>
         </View>
 
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>{sessionStats.manualConfigsCount}</Text>
-            <Text style={[styles.statLabel, { color: colors.text }]}>Configuraciones</Text>
-          </View>
-          
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
-            <Text style={[styles.statValue, { color: colors.success }]}>{sessionStats.recordedSignsCount}</Text>
-            <Text style={[styles.statLabel, { color: colors.text }]}>Señas guardadas</Text>
-          </View>
-        </View>
-
-        <View style={styles.actionContainer}>
-          <Pressable 
-            style={[styles.exportBtn, { backgroundColor: colors.primary }]} 
-            onPress={handleDataExport}
-          >
-            <Text style={styles.exportBtnText}>COMPARTIR ARCHIVO</Text>
-          </Pressable>
-
-          <Pressable 
-            style={[styles.viewDataBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} 
-            onPress={() => setIsDataModalOpen(true)}
-          >
-            <Text style={[styles.viewDataBtnText, { color: colors.text }]}>VER DATOS GUARDADOS</Text>
-          </Pressable>
-
-          <Pressable 
-            style={[styles.clearBtn, { borderColor: colors.danger }]} 
-            onPress={handleClearData}
-          >
-            <Text style={[styles.clearBtnText, { color: colors.danger }]}>LIMPIAR TODO</Text>
-          </Pressable>
+        <SectionHeader title="Acciones" />
+        <View style={styles.actionsContainer}>
+          <Button 
+            title={isSyncing ? "SINCRONIZANDO..." : "SINCRONIZAR A NUBE"}
+            color={palette.deepSkyBlue}
+            textColor="#FFFFFF"
+            icon={!isSyncing ? <CloudUpload width={24} height={24} color="#FFFFFF" strokeWidth={2.5} /> : undefined}
+            onPress={handleSyncToSupabase}
+            disabled={isSyncing}
+          />
+          <Button 
+            title="EXPLORAR DATOS LOCALES"
+            variant="secondary"
+            onPress={() => setIsExplorerOpen(true)}
+          />
+          <Button 
+            title="Formatear Local"
+            color={colors.dangerBg}
+            textColor={colors.danger}
+            icon={<Trash width={20} height={20} color={colors.danger} strokeWidth={2.5} />}
+            onPress={handleClearAll}
+          />
         </View>
       </ScrollView>
 
-      <Modal
-        visible={isDataModalOpen}
-        animationType="slide"
-        onRequestClose={() => setIsDataModalOpen(false)}
-      >
+      <Modal visible={isExplorerOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsExplorerOpen(false)}>
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Datos Guardados</Text>
-            <Pressable onPress={() => setIsDataModalOpen(false)} style={styles.closeBtn}>
-              <MaterialIcons name="close" size={28} color={colors.textSecondary} />
-            </Pressable>
+          
+          <View style={styles.modalHeader}>
+            <Typography variant="h2">Explorador Local</Typography>
+            <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsExplorerOpen(false)} />
           </View>
 
-          <View style={styles.searchWrapper}>
-            <View style={[styles.searchContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <MaterialIcons name="search" size={24} color={colors.textSecondary} style={styles.searchIcon} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.text }]}
-                placeholder="Buscar configuraciones o señas..."
-                placeholderTextColor={colors.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              {searchQuery.length > 0 && (
-                <Pressable onPress={() => setSearchQuery('')}>
-                  <MaterialIcons name="cancel" size={20} color={colors.textSecondary} />
+          <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
+            {(['configs', 'signs', 'phrases', 'modules'] as const).map((tab) => {
+              const isActive = activeTab === tab;
+              const tabColor = isActive ? palette.deepSkyBlue : colors.textSecondary;
+              const title = tab === 'configs' ? 'Configuraciones' : tab === 'signs' ? 'Señas' : tab === 'phrases' ? 'Frases' : 'Módulos';
+              
+              return (
+                <Pressable 
+                  key={tab}
+                  style={[styles.tabBtn, isActive && { borderBottomColor: palette.deepSkyBlue }]} 
+                  onPress={() => setActiveTab(tab)}
+                >
+                  <Typography variant="label" color={tabColor} numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: isActive ? '800' : '500', width: '100%', textAlign: 'center' }}>
+                    {title}
+                  </Typography>
                 </Pressable>
-              )}
-            </View>
+              );
+            })}
           </View>
 
-          <ScrollView contentContainerStyle={styles.modalScrollContent}>
-            
-            <View style={styles.listSection}>
-              <Text style={[styles.listSectionTitle, { color: colors.text }]}>Configuraciones Registradas ({filteredConfigs.length})</Text>
-              {filteredConfigs.length === 0 ? (
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No se encontraron configuraciones.</Text>
-              ) : (
-                filteredConfigs.map((config: any, index: number) => (
-                  <View key={`config-${index}`} style={[styles.dataItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Text style={[styles.dataItemTitle, { color: colors.text }]} numberOfLines={1}>{config.name}</Text>
-                    <View style={styles.dataItemActions}>
-                      <Text style={[styles.dataItemDate, { color: colors.textSecondary }]}>{formatDate(config.timestamp)}</Text>
-                      <Pressable onPress={() => handleDeleteManualConfig(config.timestamp)} style={styles.deleteIconBtn}>
-                        <MaterialIcons name="delete-outline" size={22} color={colors.danger} />
-                      </Pressable>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-
-            <View style={styles.listSection}>
-              <Text style={[styles.listSectionTitle, { color: colors.text }]}>Señas Registradas ({filteredSigns.length})</Text>
-              {Object.keys(groupedFilteredSigns).length === 0 ? (
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No se encontraron señas.</Text>
-              ) : (
-                Object.entries(groupedFilteredSigns).map(([configName, signs]: [string, any], groupIndex: number) => (
-                  <View key={`group-${groupIndex}`} style={styles.groupContainer}>
-                    <View style={[styles.groupHeader, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                      <Text style={[styles.groupTitle, { color: colors.primary }]}>{configName}</Text>
-                      <Text style={[styles.groupCount, { color: colors.textSecondary }]}>{signs.length} señas</Text>
-                    </View>
-                    
-                    <View style={styles.groupContent}>
-                      {signs.map((sign: any, signIndex: number) => (
-                        <View key={`sign-${signIndex}`} style={[styles.signItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                          <Pressable style={styles.signItemContent} onPress={() => handleOpenDetails(sign.meanings)}>
-                            <View style={styles.signItemRow}>
-                              <Text style={[styles.signItemTitle, { color: colors.text }]} numberOfLines={1}>
-                                {sign.meanings[0]} {sign.meanings.length > 1 ? `(+${sign.meanings.length - 1})` : ''}
-                              </Text>
-                              <MaterialIcons name="chevron-right" size={20} color={colors.icon} />
-                            </View>
-                            <Text style={[styles.dataItemDate, { color: colors.textSecondary }]}>{formatDate(sign.timestamp)}</Text>
-                          </Pressable>
-                          
-                          <View style={styles.signItemActions}>
-                            <Pressable onPress={() => handleDeleteRecordedSign(sign.timestamp)} style={styles.deleteIconBtn}>
-                              <MaterialIcons name="delete-outline" size={22} color={colors.danger} />
-                            </Pressable>
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
+          <ScrollView contentContainerStyle={styles.explorerScroll}>
+            {renderExplorerList().length > 0 ? renderExplorerList() : (
+              <View style={styles.emptyState}>
+                <Typography variant="body" color={colors.textSecondary}>No hay datos en esta categoría.</Typography>
+              </View>
+            )}
           </ScrollView>
+
         </SafeAreaView>
       </Modal>
 
-      <Modal
-        visible={isDetailsModalOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsDetailsModalOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.detailsModalContent, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.detailsModalTitle, { color: colors.text }]}>Significados Guardados</Text>
+      <Modal visible={isDetailOpen} transparent={true} animationType="fade" onRequestClose={() => setIsDetailOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setIsDetailOpen(false)} />
+          <Card style={[styles.detailCard, { backgroundColor: colors.background }]}>
             
-            <ScrollView style={styles.meaningsListContainer}>
-              {selectedSignMeanings.map((meaning, idx) => (
-                <View key={`meaning-${idx}`} style={[styles.meaningBubble, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <MaterialIcons name="label" size={16} color={colors.primary} />
-                  <Text style={[styles.meaningText, { color: colors.text }]}>{meaning}</Text>
-                </View>
-              ))}
+            <View style={styles.detailHeader}>
+              <View style={{ flex: 1, paddingRight: 16 }}>
+                <Typography variant="h2" numberOfLines={1}>
+                  {selectedItemType === 'sign' ? selectedItem?.meanings?.[0] : 
+                   selectedItemType === 'phrase' ? selectedItem?.spanishTranslation : 
+                   selectedItem?.title}
+                </Typography>
+              </View>
+              <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsDetailOpen(false)} />
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+              {renderDetailContent()}
             </ScrollView>
 
-            <Pressable 
-              style={[styles.closeDetailsBtn, { backgroundColor: colors.primary }]} 
-              onPress={() => setIsDetailsModalOpen(false)}
-            >
-              <Text style={styles.closeDetailsBtnText}>CERRAR</Text>
-            </Pressable>
-          </View>
+            <View style={{ marginTop: 24, gap: 12 }}>
+              <Button 
+                title="Editar Elemento"
+                color={colors.surface}
+                textColor={colors.text}
+                icon={<Edit width={20} height={20} color={colors.text} strokeWidth={2.5} />}
+                onPress={handleEditItem}
+                style={{ borderWidth: 1, borderColor: colors.border }}
+              />
+              <Button 
+                title="Borrar Elemento"
+                color={colors.dangerBg}
+                textColor={colors.danger}
+                icon={<Trash width={20} height={20} color={colors.danger} strokeWidth={2.5} />}
+                onPress={() => {
+                  if (selectedItemType === 'sign') handleDeleteSign(selectedItem.timestamp);
+                  if (selectedItemType === 'phrase') handleDeletePhrase(selectedItem.id);
+                  if (selectedItemType === 'module') handleDeleteModule(selectedItem.id);
+                }}
+              />
+            </View>
+          </Card>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { padding: 24, paddingBottom: 12 },
-  headerText: { fontSize: 24, fontWeight: 'bold' },
-  content: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 110 },
-  infoSection: { marginBottom: 32 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 4 },
-  sectionSubtitle: { fontSize: 14, lineHeight: 20 },
-  statsGrid: { flexDirection: 'row', gap: 16, marginBottom: 32 },
-  statCard: { flex: 1, padding: 20, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  statValue: { fontSize: 32, fontWeight: 'bold', marginBottom: 8 },
-  statLabel: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
-  actionContainer: { gap: 16 },
-  exportBtn: { padding: 18, borderRadius: 12, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  exportBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
-  viewDataBtn: { padding: 18, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
-  viewDataBtnText: { fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
-  clearBtn: { padding: 18, borderRadius: 12, alignItems: 'center', borderWidth: 1, backgroundColor: 'transparent' },
-  clearBtnText: { fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold' },
-  closeBtn: { padding: 4 },
-  searchWrapper: { padding: 20, paddingBottom: 10 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderRadius: 12, borderWidth: 1 },
-  searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, paddingVertical: 14, fontSize: 16 },
-  modalScrollContent: { padding: 20, paddingBottom: 80 },
-  listSection: { marginBottom: 32 },
-  listSectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
-  emptyText: { fontSize: 14, fontStyle: 'italic' },
-  dataItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 16, paddingRight: 8, paddingVertical: 12, borderRadius: 12, borderWidth: 1, marginBottom: 12 },
-  dataItemTitle: { fontSize: 16, fontWeight: '500', flex: 1, paddingRight: 10 },
-  dataItemActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  dataItemDate: { fontSize: 12 },
-  deleteIconBtn: { padding: 8 },
-  groupContainer: { marginBottom: 20 },
-  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8, borderWidth: 1, marginBottom: 8 },
-  groupTitle: { fontSize: 14, fontWeight: 'bold' },
-  groupCount: { fontSize: 12, fontWeight: '500' },
-  groupContent: { paddingLeft: 12 },
-  signItem: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, marginBottom: 8, overflow: 'hidden' },
-  signItemContent: { flex: 1, padding: 14 },
-  signItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  signItemTitle: { fontSize: 15, fontWeight: '500', flex: 1 },
-  signItemActions: { paddingRight: 8 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  detailsModalContent: { width: '100%', padding: 24, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10 },
-  detailsModalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  meaningsListContainer: { maxHeight: 300, marginBottom: 24 },
-  meaningBubble: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 10, gap: 10 },
-  meaningText: { fontSize: 16, fontWeight: '500', flex: 1 },
-  closeDetailsBtn: { padding: 16, borderRadius: 12, alignItems: 'center' },
-  closeDetailsBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 12 },
+  headerTitleContainer: { flex: 1, alignItems: 'center' },
+  content: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: 8 },
+  statsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 36, rowGap: 14 },
+  statBox: { width: '48%', padding: 20, borderRadius: 24, borderWidth: 1, alignItems: 'flex-start' },
+  actionsContainer: { gap: 12 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingBottom: 16 },
+  tabsContainer: { flexDirection: 'row', borderBottomWidth: 1 },
+  tabBtn: { flex: 1, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 3, borderBottomColor: 'transparent', paddingHorizontal: 4 },
+  explorerScroll: { padding: 24, gap: 16 },
+  listItem: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, padding: 16 },
+  listItemPressable: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  emptyState: { padding: 40, alignItems: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.45)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  detailCard: { width: '100%', padding: 24, borderRadius: 32 },
+  detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  detailGroup: { marginBottom: 20 },
+  detailLabel: { marginBottom: 8, letterSpacing: 0.5 },
+  relationPill: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 16, gap: 12 },
 });

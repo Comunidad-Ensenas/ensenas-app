@@ -7,6 +7,7 @@ import { phrases, signs } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ChatBubble, Check, Plus, Search, VideoCamera, Xmark } from 'iconoir-react-native';
 import React, { useCallback, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -15,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function StudioModuleScreen() {
   const { colors } = useTheme();
   const palette = (colors as any).palette;
+  
+  const { moduleId } = useLocalSearchParams<{ moduleId?: string }>();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -49,7 +52,8 @@ export default function StudioModuleScreen() {
             isLocal: true
           }));
 
-          setAvailableSigns([...formattedLocalSigns, ...formattedDbSigns]);
+          const allSigns = [...formattedLocalSigns, ...formattedDbSigns];
+          setAvailableSigns(allSigns);
 
           const dbPhrases = await db.select().from(phrases);
           const formattedDbPhrases = dbPhrases.map(p => ({
@@ -68,13 +72,56 @@ export default function StudioModuleScreen() {
             isLocal: true
           }));
 
-          setAvailablePhrases([...formattedLocalPhrases, ...formattedDbPhrases]);
+          const allPhrases = [...formattedLocalPhrases, ...formattedDbPhrases];
+          setAvailablePhrases(allPhrases);
+
+          if (moduleId) {
+            const storedModulesStr = await AsyncStorage.getItem('@ensenas_recorded_modules');
+            const storedModules = storedModulesStr ? JSON.parse(storedModulesStr) : [];
+            const moduleToEdit = storedModules.find((m: any) => m.id === moduleId);
+
+            if (moduleToEdit) {
+              setTitle(moduleToEdit.title);
+              setDescription(moduleToEdit.description || '');
+              setDifficultyLevel(moduleToEdit.difficultyLevel || 1);
+
+              const loadedItems = moduleToEdit.items.map((item: any, index: number) => {
+                let label = 'Elemento eliminado o desconocido';
+                let isLocal = false;
+                
+                if (item.itemType === 'sign') {
+                  const foundSign = allSigns.find(s => s.id === item.itemId);
+                  if (foundSign) { label = foundSign.label; isLocal = foundSign.isLocal; }
+                } else {
+                  const foundPhrase = allPhrases.find(p => p.id === item.itemId);
+                  if (foundPhrase) { label = foundPhrase.label; isLocal = foundPhrase.isLocal; }
+                }
+
+                return {
+                  id: item.itemId,
+                  label,
+                  type: item.itemType,
+                  isLocal,
+                  listId: `loaded_${item.itemId}_${index}_${Date.now()}`
+                };
+              });
+
+              setModuleItems(loadedItems);
+            }
+          } else {
+            setTitle('');
+            setDescription('');
+            setDifficultyLevel(1);
+            setModuleItems([]);
+          }
+
         } catch (e) {
-          console.error(e);
+          console.error("Error cargando datos:", e);
         }
       };
+      
       fetchData();
-    }, [])
+    }, [moduleId])
   );
 
   const handleAddItem = (item: any) => {
@@ -90,30 +137,42 @@ export default function StudioModuleScreen() {
   const handleSaveModule = async () => {
     if (!title.trim() || moduleItems.length === 0) return;
 
-    const newModule = {
-      id: `local_module_${Date.now()}`,
-      title: title.trim(),
-      description: description.trim(),
-      difficultyLevel,
-      items: moduleItems.map((item, index) => ({
-        itemType: item.type,
-        itemId: item.id,
-        orderIndex: index
-      })),
-      timestamp: new Date().toISOString()
-    };
-
     try {
       const storedData = await AsyncStorage.getItem('@ensenas_recorded_modules');
-      const currentData = storedData ? JSON.parse(storedData) : [];
-      await AsyncStorage.setItem('@ensenas_recorded_modules', JSON.stringify([...currentData, newModule]));
+      let currentData = storedData ? JSON.parse(storedData) : [];
 
-      Alert.alert("Módulo Guardado", "El módulo educativo se estructuró correctamente.");
+      const targetId = moduleId || `local_module_${Date.now()}`;
       
-      setTitle('');
-      setDescription('');
-      setDifficultyLevel(1);
-      setModuleItems([]);
+      const moduleData = {
+        id: targetId,
+        title: title.trim(),
+        description: description.trim(),
+        difficultyLevel,
+        items: moduleItems.map((item, index) => ({
+          itemType: item.type,
+          itemId: item.id,
+          orderIndex: index
+        })),
+        timestamp: moduleId 
+          ? (currentData.find((m:any) => m.id === moduleId)?.timestamp || new Date().toISOString()) 
+          : new Date().toISOString()
+      };
+
+      if (moduleId) {
+        currentData = currentData.map((m: any) => m.id === moduleId ? moduleData : m);
+        await AsyncStorage.setItem('@ensenas_recorded_modules', JSON.stringify(currentData));
+        Alert.alert("Módulo Actualizado", "Los cambios se han guardado correctamente.", [
+          { text: "OK", onPress: () => router.back() }
+        ]);
+      } else {
+        await AsyncStorage.setItem('@ensenas_recorded_modules', JSON.stringify([...currentData, moduleData]));
+        Alert.alert("Módulo Guardado", "El módulo educativo se estructuró correctamente.");
+        setTitle('');
+        setDescription('');
+        setDifficultyLevel(1);
+        setModuleItems([]);
+      }
+      
     } catch (e) {
       Alert.alert("Error", "Ocurrió un problema al guardar el módulo.");
     }
@@ -131,7 +190,7 @@ export default function StudioModuleScreen() {
       
       <View style={styles.header}>
         <View style={styles.headerTitleContainer}>
-          <Typography variant="h3">Crear Módulo</Typography>
+          <Typography variant="h3">{moduleId ? 'Editar Módulo' : 'Crear Módulo'}</Typography>
         </View>
       </View>
 
@@ -224,7 +283,7 @@ export default function StudioModuleScreen() {
 
       <View style={[styles.bottomBar, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <Button 
-          title="Guardar Módulo" 
+          title={moduleId ? "Actualizar Módulo" : "Guardar Módulo"}
           color={palette.deepSkyBlue} 
           textColor="#FFFFFF" 
           icon={<Check width={20} height={20} color="#FFFFFF" strokeWidth={2.5} />} 

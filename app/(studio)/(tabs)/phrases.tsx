@@ -7,6 +7,7 @@ import { signs } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Check, Plus, Search, Xmark } from 'iconoir-react-native';
 import React, { useCallback, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -15,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function StudioPhraseScreen() {
     const { colors } = useTheme();
     const palette = (colors as any).palette;
+    
+    const { phraseId } = useLocalSearchParams<{ phraseId?: string }>();
 
     const [spanishTranslation, setSpanishTranslation] = useState('');
     const [lsvGloss, setLsvGloss] = useState('');
@@ -27,7 +30,7 @@ export default function StudioPhraseScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            const fetchAllSigns = async () => {
+            const fetchData = async () => {
                 try {
                     const dbSigns = await db.select().from(signs);
                     const formattedDbSigns = dbSigns.map(s => ({
@@ -44,13 +47,44 @@ export default function StudioPhraseScreen() {
                         isLocal: true
                     }));
 
-                    setAvailableSigns([...formattedLocalSigns, ...formattedDbSigns]);
+                    const allSigns = [...formattedLocalSigns, ...formattedDbSigns];
+                    setAvailableSigns(allSigns);
+
+                    if (phraseId) {
+                        const storedPhrasesStr = await AsyncStorage.getItem('@ensenas_recorded_phrases');
+                        const storedPhrases = storedPhrasesStr ? JSON.parse(storedPhrasesStr) : [];
+                        const phraseToEdit = storedPhrases.find((p: any) => p.id === phraseId);
+
+                        if (phraseToEdit) {
+                            setSpanishTranslation(phraseToEdit.spanishTranslation);
+                            setLsvGloss(phraseToEdit.lsvGloss);
+                            setDescription(phraseToEdit.description || '');
+
+                            const loadedSigns = phraseToEdit.signs.map((item: any, index: number) => {
+                                const foundSign = allSigns.find(s => s.id === item.signId);
+                                
+                                return {
+                                    id: item.signId,
+                                    meanings: foundSign ? foundSign.meanings : ['Seña eliminada'],
+                                    isLocal: foundSign ? foundSign.isLocal : false,
+                                    listId: `loaded_sign_${item.signId}_${index}_${Date.now()}`
+                                };
+                            });
+
+                            setSelectedSigns(loadedSigns);
+                        }
+                    } else {
+                        setSpanishTranslation('');
+                        setLsvGloss('');
+                        setDescription('');
+                        setSelectedSigns([]);
+                    }
                 } catch (e) {
                     console.error(e);
                 }
             };
-            fetchAllSigns();
-        }, [])
+            fetchData();
+        }, [phraseId])
     );
 
     const handleAddSign = (sign: any) => {
@@ -66,26 +100,38 @@ export default function StudioPhraseScreen() {
     const handleSavePhrase = async () => {
         if (selectedSigns.length === 0 || !spanishTranslation.trim() || !lsvGloss.trim()) return;
 
-        const newPhrase = {
-            id: `local_phrase_${Date.now()}`,
-            spanishTranslation: spanishTranslation.trim(),
-            lsvGloss: lsvGloss.trim(),
-            description: description.trim(),
-            signs: selectedSigns.map((s, index) => ({ signId: s.id, orderIndex: index })),
-            timestamp: new Date().toISOString()
-        };
-
         try {
             const storedData = await AsyncStorage.getItem('@ensenas_recorded_phrases');
-            const currentData = storedData ? JSON.parse(storedData) : [];
-            await AsyncStorage.setItem('@ensenas_recorded_phrases', JSON.stringify([...currentData, newPhrase]));
+            let currentData = storedData ? JSON.parse(storedData) : [];
 
-            Alert.alert("Frase Guardada", "La frase se estructuró y guardó correctamente.");
+            const targetId = phraseId || `local_phrase_${Date.now()}`;
 
-            setSpanishTranslation('');
-            setLsvGloss('');
-            setDescription('');
-            setSelectedSigns([]);
+            const phraseData = {
+                id: targetId,
+                spanishTranslation: spanishTranslation.trim(),
+                lsvGloss: lsvGloss.trim(),
+                description: description.trim(),
+                signs: selectedSigns.map((s, index) => ({ signId: s.id, orderIndex: index })),
+                timestamp: phraseId 
+                    ? (currentData.find((p:any) => p.id === phraseId)?.timestamp || new Date().toISOString()) 
+                    : new Date().toISOString()
+            };
+
+            if (phraseId) {
+                currentData = currentData.map((p: any) => p.id === phraseId ? phraseData : p);
+                await AsyncStorage.setItem('@ensenas_recorded_phrases', JSON.stringify(currentData));
+                Alert.alert("Frase Actualizada", "Los cambios se han guardado correctamente.", [
+                    { text: "OK", onPress: () => router.back() }
+                ]);
+            } else {
+                await AsyncStorage.setItem('@ensenas_recorded_phrases', JSON.stringify([...currentData, phraseData]));
+                Alert.alert("Frase Guardada", "La frase se estructuró y guardó correctamente.");
+                setSpanishTranslation('');
+                setLsvGloss('');
+                setDescription('');
+                setSelectedSigns([]);
+            }
+
         } catch (e) {
             Alert.alert("Error", "Ocurrió un problema al guardar la frase.");
         }
@@ -102,7 +148,7 @@ export default function StudioPhraseScreen() {
 
             <View style={styles.header}>
                 <View style={styles.headerTitleContainer}>
-                    <Typography variant="h3">Crear Frase</Typography>
+                    <Typography variant="h3">{phraseId ? 'Editar Frase' : 'Crear Frase'}</Typography>
                 </View>
             </View>
 
@@ -120,7 +166,7 @@ export default function StudioPhraseScreen() {
                                 <View style={[styles.orderBadge, { backgroundColor: palette.deepSkyBlue }]}>
                                     <Typography variant="label" color="#FFFFFF" style={{ fontWeight: '800', fontSize: 12 }}>{index + 1}</Typography>
                                 </View>
-                                <Typography variant="body" color={colors.text} style={{ fontWeight: '600', marginBottom: 4 }}>
+                                <Typography variant="body" color={colors.text} style={{ fontWeight: '600', marginBottom: 4 }} numberOfLines={2} align="center">
                                     {sign.meanings[0]}
                                 </Typography>
                                 <Pressable onPress={() => handleRemoveSign(sign.listId)} style={[styles.removeSignBtn, { backgroundColor: colors.input }]}>
@@ -182,7 +228,7 @@ export default function StudioPhraseScreen() {
 
             <View style={[styles.bottomBar, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
                 <Button
-                    title="Guardar Frase"
+                    title={phraseId ? "Actualizar Frase" : "Guardar Frase"}
                     color={palette.deepSkyBlue}
                     textColor="#FFFFFF"
                     icon={<Check width={20} height={20} color="#FFFFFF" strokeWidth={2.5} />}
