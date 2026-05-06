@@ -3,7 +3,13 @@ import { db } from '@/db';
 import { profile } from '@/db/schema';
 import migrations from '@/drizzle/migrations';
 import { useTheme } from '@/hooks/useTheme';
-import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from '@expo-google-fonts/poppins';
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold,
+} from '@expo-google-fonts/poppins';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import { useFonts } from 'expo-font';
@@ -40,6 +46,8 @@ export default function RootLayout() {
     Poppins_400Regular,
     Poppins_500Medium,
     Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
   });
 
   const { success: migrationsSuccess, error: migrationError } = useMigrations(db, migrations);
