@@ -107,6 +107,22 @@ export default function OnboardingScreen() {
   };
 
   useEffect(() => {
+    const verifyUser = async () => {
+      try {
+        const users = await db.select().from(profile).limit(1);
+
+        if (users && users.length === 1) {
+          router.replace('/(app)/(tabs)');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    verifyUser();
+  }, []);
+
+  useEffect(() => {
     if (step > 0) {
       Animated.timing(progressAnim, {
         toValue: step / TOTAL_STEPS,
