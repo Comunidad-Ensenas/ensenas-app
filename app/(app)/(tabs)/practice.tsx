@@ -162,7 +162,7 @@ export default function PracticeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
         <Card variant="contrast" style={{ marginBottom: 36 }}>
-          <Typography variant="h3" color="#FFFFFF" style={{ marginBottom: 20 }}>Hola {userData.firstName}, ¿listo para aprender?</Typography>
+          <Typography variant="h3" color="#FFFFFF" style={{ marginBottom: 20 }}>¿listo para aprender?</Typography>
           <View style={styles.progressSection}>
             <Typography variant="label" color="rgba(255,255,255,0.7)" style={{ marginBottom: 8 }}>Progreso diario</Typography>
             <View style={[styles.progressBarBg, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>

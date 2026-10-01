@@ -3,22 +3,49 @@ import { Card } from '@/components/common/Card';
 import { IconBox } from '@/components/common/IconBox';
 import { IconButton } from '@/components/common/IconButton';
 import { SectionHeader } from '@/components/common/SectionHeader';
+import SignPlayer from '@/components/common/SignPlayer';
 import { Typography } from '@/components/common/Typography';
 import { useTheme } from '@/hooks/useTheme';
-import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { BookStack, ChatBubble, CloudUpload, DragHandGesture, Edit, NavArrowRight, Trash, VideoCamera, Xmark } from 'iconoir-react-native';
+import {
+  BookStack,
+  ChatBubble,
+  DragHandGesture,
+  Edit,
+  NavArrowRight,
+  Trash,
+  VideoCamera,
+  Xmark,
+} from 'iconoir-react-native';
 import React, { useCallback, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Alert,
+  Dimensions,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const { width: screenWidth } = Dimensions.get('window');
+const playerWidth = screenWidth - 88;
+const playerHeight = playerWidth * 1.33;
+
+const TAB_TITLES = {
+  configs: 'Configuraciones',
+  signs: 'Señas',
+  phrases: 'Frases',
+  modules: 'Módulos'
+} as const;
+
 export default function StudioExportScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const palette = (colors as any).palette;
-  
-  const [isSyncing, setIsSyncing] = useState(false);
+
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'configs' | 'signs' | 'phrases' | 'modules'>('configs');
 
@@ -71,43 +98,6 @@ export default function StudioExportScreen() {
     if (!idToFind) return 'Desconocida';
     const phrase = data.phrases.find(p => p.id === idToFind);
     return phrase?.spanishTranslation || 'Frase eliminada';
-  };
-
-  const handleSyncToSupabase = async () => {
-    const totalItems = data.configs.length + data.signs.length + data.phrases.length + data.modules.length;
-    if (totalItems === 0) {
-      Alert.alert("Vacío", "No hay datos para sincronizar.");
-      return;
-    }
-
-    setIsSyncing(true);
-    try {
-      if (data.configs.length > 0) {
-        const configsPayload = data.configs.map(c => ({ local_timestamp: c.timestamp, name: c.name, landmarks: c.landmarks }));
-        const { error } = await supabase.from('raw_manual_configs').upsert(configsPayload, { onConflict: 'local_timestamp' });
-        if (error) throw error;
-      }
-      if (data.signs.length > 0) {
-        const signsPayload = data.signs.map(s => ({ local_timestamp: s.timestamp, config_hand_dominant_id: s.configHandDominantId, config_hand_recessive_id: s.configHandRecessiveId, meanings: s.meanings, frames: s.frames }));
-        const { error } = await supabase.from('raw_signs').upsert(signsPayload, { onConflict: 'local_timestamp' });
-        if (error) throw error;
-      }
-      if (data.phrases.length > 0) {
-        const phrasesPayload = data.phrases.map(p => ({ local_id: p.id, spanish_translation: p.spanishTranslation, lsv_gloss: p.lsvGloss, description: p.description, signs_list: p.signs }));
-        const { error } = await supabase.from('raw_phrases').upsert(phrasesPayload, { onConflict: 'local_id' });
-        if (error) throw error;
-      }
-      if (data.modules.length > 0) {
-        const modulesPayload = data.modules.map(m => ({ local_id: m.id, title: m.title, description: m.description, difficulty_level: m.difficultyLevel, items_list: m.items }));
-        const { error } = await supabase.from('raw_modules').upsert(modulesPayload, { onConflict: 'local_id' });
-        if (error) throw error;
-      }
-      Alert.alert("¡Éxito!", "Todos los datos han sido sincronizados en Supabase.");
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Ocurrió un problema subiendo los datos.");
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   const saveAllData = async (newData: typeof data) => {
@@ -179,7 +169,7 @@ export default function StudioExportScreen() {
         });
         return { ...m, items: keptItems };
       });
-      
+
       if (type === 'module') {
         modules = modules.filter(m => m.id !== targetId);
       }
@@ -220,10 +210,12 @@ export default function StudioExportScreen() {
   const handleClearAll = () => {
     Alert.alert("⚠️ PELIGRO: Borrar Todo", "Esto eliminará permanentemente todo tu trabajo local.", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Sí, destruir datos", style: "destructive", onPress: async () => {
+      {
+        text: "Sí, destruir datos", style: "destructive", onPress: async () => {
           await saveAllData({ configs: [], signs: [], phrases: [], modules: [] });
           Alert.alert("Listo", "Almacenamiento local formateado.");
-      }}
+        }
+      }
     ]);
   };
 
@@ -236,7 +228,7 @@ export default function StudioExportScreen() {
   const handleEditItem = () => {
     setIsDetailOpen(false);
     setIsExplorerOpen(false);
-    
+
     if (selectedItemType === 'module') {
       router.push({ pathname: './modules', params: { moduleId: selectedItem.id } } as any);
     } else if (selectedItemType === 'phrase') {
@@ -250,13 +242,16 @@ export default function StudioExportScreen() {
     switch (activeTab) {
       case 'configs':
         return data.configs.map((item, index) => (
-          <View key={item.timestamp} style={[styles.listItem, { backgroundColor: colors.surface }]}>
-            <Typography variant="label" color={colors.textSecondary} style={{ width: 24 }}>#{index + 1}</Typography>
-            <IconBox size={44} icon={<DragHandGesture width={24} height={24} color={palette.deepSkyBlue} />} backgroundColor={palette.deepSkyBlue + '20'} style={{ marginHorizontal: 12 }} />
-            <View style={{ flex: 1 }}>
-              <Typography variant="body" style={{ fontWeight: '800' }}>{item.name}</Typography>
+          <View key={item.timestamp} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
+            <View style={styles.listItemPressable}>
+              <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
+              <IconBox size={44} icon={<DragHandGesture width={24} height={24} color={palette.deepSkyBlue} />} backgroundColor={palette.deepSkyBlue + '20'} style={{ marginHorizontal: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Typography variant="body" style={{ fontWeight: '800' }}>{item.name}</Typography>
+                <Typography variant="label" color={colors.textSecondary}>Configuración manual</Typography>
+              </View>
             </View>
-            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteConfig(item.timestamp)} />
+            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteConfig(item.timestamp)} style={{ marginLeft: 8, marginRight: 8 }} />
           </View>
         ));
       case 'signs':
@@ -313,6 +308,14 @@ export default function StudioExportScreen() {
     if (selectedItemType === 'sign') {
       return (
         <>
+          <View style={{ width: '100%', height: playerHeight, marginBottom: 24, borderRadius: 24, overflow: 'hidden', backgroundColor: '#111' }}>
+            <SignPlayer
+              animationFile={selectedItem.animationFile}
+              width={playerWidth}
+              height={playerHeight}
+            />
+          </View>
+
           <View style={styles.detailGroup}>
             <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>SIGNIFICADOS</Typography>
             <Typography variant="body">{selectedItem.meanings?.join(', ')}</Typography>
@@ -373,12 +376,12 @@ export default function StudioExportScreen() {
           </View>
           <View style={styles.detailGroup}>
             <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>CONTENIDO DEL MÓDULO ({selectedItem.items?.length})</Typography>
-            {selectedItem.items?.sort((a:any, b:any) => a.orderIndex - b.orderIndex).map((item: any, idx: number) => {
+            {selectedItem.items?.sort((a: any, b: any) => a.orderIndex - b.orderIndex).map((item: any, idx: number) => {
               const isSign = item.itemType === 'sign';
               const tintColor = isSign ? colors.success : palette.powderBlush;
               const bgTint = isSign ? colors.successBg : palette.powderBlush + '15';
               const itemName = isSign ? getSignName(item.itemId) : getPhraseName(item.itemId);
-              
+
               return (
                 <View key={idx} style={[styles.relationPill, { backgroundColor: bgTint, marginBottom: 8 }]}>
                   <Typography variant="body" color={tintColor} style={{ fontWeight: '800' }}>{idx + 1}.</Typography>
@@ -399,7 +402,7 @@ export default function StudioExportScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      
+
       <View style={styles.header}>
         <View style={styles.headerTitleContainer}>
           <Typography variant="h3">Datos</Typography>
@@ -407,7 +410,7 @@ export default function StudioExportScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        
+
         <View style={styles.statsContainer}>
           <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <IconBox size={44} icon={<DragHandGesture width={24} height={24} color={palette.deepSkyBlue} />} backgroundColor={palette.deepSkyBlue + '15'} />
@@ -436,20 +439,12 @@ export default function StudioExportScreen() {
 
         <SectionHeader title="Acciones" />
         <View style={styles.actionsContainer}>
-          <Button 
-            title={isSyncing ? "SINCRONIZANDO..." : "SINCRONIZAR A NUBE"}
-            color={palette.deepSkyBlue}
-            textColor="#FFFFFF"
-            icon={!isSyncing ? <CloudUpload width={24} height={24} color="#FFFFFF" strokeWidth={2.5} /> : undefined}
-            onPress={handleSyncToSupabase}
-            disabled={isSyncing}
-          />
-          <Button 
+          <Button
             title="EXPLORAR DATOS LOCALES"
             variant="secondary"
             onPress={() => setIsExplorerOpen(true)}
           />
-          <Button 
+          <Button
             title="Formatear Local"
             color={colors.dangerBg}
             textColor={colors.danger}
@@ -461,22 +456,22 @@ export default function StudioExportScreen() {
 
       <Modal visible={isExplorerOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsExplorerOpen(false)}>
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-          
+
           <View style={styles.modalHeader}>
             <Typography variant="h2">Explorador Local</Typography>
             <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsExplorerOpen(false)} />
           </View>
 
           <View style={[styles.tabsContainer, { borderBottomColor: colors.border }]}>
-            {(['configs', 'signs', 'phrases', 'modules'] as const).map((tab) => {
+            {(Object.keys(TAB_TITLES) as Array<keyof typeof TAB_TITLES>).map((tab) => {
               const isActive = activeTab === tab;
               const tabColor = isActive ? palette.deepSkyBlue : colors.textSecondary;
-              const title = tab === 'configs' ? 'Configuraciones' : tab === 'signs' ? 'Señas' : tab === 'phrases' ? 'Frases' : 'Módulos';
-              
+              const title = TAB_TITLES[tab];
+
               return (
-                <Pressable 
+                <Pressable
                   key={tab}
-                  style={[styles.tabBtn, isActive && { borderBottomColor: palette.deepSkyBlue }]} 
+                  style={[styles.tabBtn, isActive && { borderBottomColor: palette.deepSkyBlue }]}
                   onPress={() => setActiveTab(tab)}
                 >
                   <Typography variant="label" color={tabColor} numberOfLines={1} adjustsFontSizeToFit style={{ fontWeight: isActive ? '800' : '500', width: '100%', textAlign: 'center' }}>
@@ -502,24 +497,24 @@ export default function StudioExportScreen() {
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={() => setIsDetailOpen(false)} />
           <Card style={[styles.detailCard, { backgroundColor: colors.background }]}>
-            
+
             <View style={styles.detailHeader}>
               <View style={{ flex: 1, paddingRight: 16 }}>
                 <Typography variant="h2" numberOfLines={1}>
-                  {selectedItemType === 'sign' ? selectedItem?.meanings?.[0] : 
-                   selectedItemType === 'phrase' ? selectedItem?.spanishTranslation : 
-                   selectedItem?.title}
+                  {selectedItemType === 'sign' ? selectedItem?.meanings?.[0] :
+                    selectedItemType === 'phrase' ? selectedItem?.spanishTranslation :
+                      selectedItem?.title}
                 </Typography>
               </View>
               <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsDetailOpen(false)} />
             </View>
-            
+
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
               {renderDetailContent()}
             </ScrollView>
 
             <View style={{ marginTop: 24, gap: 12 }}>
-              <Button 
+              <Button
                 title="Editar Elemento"
                 color={colors.surface}
                 textColor={colors.text}
@@ -527,7 +522,7 @@ export default function StudioExportScreen() {
                 onPress={handleEditItem}
                 style={{ borderWidth: 1, borderColor: colors.border }}
               />
-              <Button 
+              <Button
                 title="Borrar Elemento"
                 color={colors.dangerBg}
                 textColor={colors.danger}

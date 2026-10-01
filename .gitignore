@@ -43,3 +43,10 @@ yarn-error.*
 # environment
 .env
 .env.production
+
+graphify-out/
+.idea/
+.vscode/
+
+scripts/
+tools/

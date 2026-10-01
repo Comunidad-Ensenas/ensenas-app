@@ -7,7 +7,7 @@ const config = getDefaultConfig(__dirname);
 
 const appMode = process.env.EXPO_PUBLIC_APP_ENV || 'learner';
 
-config.resolver.assetExts.push('task', 'wasm', 'bin');
+config.resolver.assetExts.push('task', 'wasm', 'bin', 'glb', 'tflite', 'vrm');
 
 if (appMode === 'studio') {
   config.resolver.blockList = [
