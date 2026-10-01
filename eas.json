@@ -8,13 +8,22 @@
       "developmentClient": true,
       "distribution": "internal"
     },
-    "preview": {
+    "preview-learner": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_APP_MODE": "else"
+        "EXPO_PUBLIC_APP_MODE": "learner"
+      }
+    },
+    "preview-studio": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_APP_MODE": "studio"
       }
     },
     "production": {
