@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "da36425d-5aa4-4d1d-9fe5-141285b2db2b",
+  "id": "e44c6db3-68e8-4924-b183-e38e9b46c7ef",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "activity_log": {
@@ -67,8 +67,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "manual_configurations": {
-      "name": "manual_configurations",
+    "cultural_tips": {
+      "name": "cultural_tips",
       "columns": {
         "id": {
           "name": "id",
@@ -76,6 +76,37 @@
           "primaryKey": true,
           "notNull": true,
           "autoincrement": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "manual_configurations": {
+      "name": "manual_configurations",
+      "columns": {
+        "local_id": {
+          "name": "local_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
         },
         "code": {
           "name": "code",
@@ -97,11 +128,210 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "raw_landmarks": {
+          "name": "raw_landmarks",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "baked_quaternions": {
+          "name": "baked_quaternions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "learning_tips": {
+          "name": "learning_tips",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "module_items": {
+      "name": "module_items",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "module_id": {
+          "name": "module_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "item_type": {
+          "name": "item_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "item_id": {
+          "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "config_id": {
+          "name": "config_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sign_id": {
+          "name": "sign_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "phrase_id": {
+          "name": "phrase_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "order_index": {
+          "name": "order_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "module_items_module_id_sign_modules_local_id_fk": {
+          "name": "module_items_module_id_sign_modules_local_id_fk",
+          "tableFrom": "module_items",
+          "tableTo": "sign_modules",
+          "columnsFrom": [
+            "module_id"
+          ],
+          "columnsTo": [
+            "local_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "module_items_config_id_manual_configurations_local_id_fk": {
+          "name": "module_items_config_id_manual_configurations_local_id_fk",
+          "tableFrom": "module_items",
+          "tableTo": "manual_configurations",
+          "columnsFrom": [
+            "config_id"
+          ],
+          "columnsTo": [
+            "local_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "module_items_sign_id_signs_local_id_fk": {
+          "name": "module_items_sign_id_signs_local_id_fk",
+          "tableFrom": "module_items",
+          "tableTo": "signs",
+          "columnsFrom": [
+            "sign_id"
+          ],
+          "columnsTo": [
+            "local_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "module_items_phrase_id_phrases_local_id_fk": {
+          "name": "module_items_phrase_id_phrases_local_id_fk",
+          "tableFrom": "module_items",
+          "tableTo": "phrases",
+          "columnsFrom": [
+            "phrase_id"
+          ],
+          "columnsTo": [
+            "local_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "module_prerequisites": {
+      "name": "module_prerequisites",
+      "columns": {
+        "module_id": {
+          "name": "module_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "required_module_id": {
+          "name": "required_module_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "module_prerequisites_module_id_sign_modules_local_id_fk": {
+          "name": "module_prerequisites_module_id_sign_modules_local_id_fk",
+          "tableFrom": "module_prerequisites",
+          "tableTo": "sign_modules",
+          "columnsFrom": [
+            "module_id"
+          ],
+          "columnsTo": [
+            "local_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "module_prerequisites_required_module_id_sign_modules_local_id_fk": {
+          "name": "module_prerequisites_required_module_id_sign_modules_local_id_fk",
+          "tableFrom": "module_prerequisites",
+          "tableTo": "sign_modules",
+          "columnsFrom": [
+            "required_module_id"
+          ],
+          "columnsTo": [
+            "local_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "module_prerequisites_module_id_required_module_id_pk": {
+          "columns": [
+            "module_id",
+            "required_module_id"
+          ],
+          "name": "module_prerequisites_module_id_required_module_id_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
@@ -124,7 +354,7 @@
         },
         "module_id": {
           "name": "module_id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -194,20 +424,133 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "module_progress_module_id_sign_modules_id_fk": {
-          "name": "module_progress_module_id_sign_modules_id_fk",
+        "module_progress_module_id_sign_modules_local_id_fk": {
+          "name": "module_progress_module_id_sign_modules_local_id_fk",
           "tableFrom": "module_progress",
           "tableTo": "sign_modules",
           "columnsFrom": [
             "module_id"
           ],
           "columnsTo": [
-            "id"
+            "local_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "phrase_signs": {
+      "name": "phrase_signs",
+      "columns": {
+        "phrase_id": {
+          "name": "phrase_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sign_id": {
+          "name": "sign_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "order_index": {
+          "name": "order_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "transition_delay_ms": {
+          "name": "transition_delay_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "phrase_signs_phrase_id_phrases_local_id_fk": {
+          "name": "phrase_signs_phrase_id_phrases_local_id_fk",
+          "tableFrom": "phrase_signs",
+          "tableTo": "phrases",
+          "columnsFrom": [
+            "phrase_id"
+          ],
+          "columnsTo": [
+            "local_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "phrase_signs_sign_id_signs_local_id_fk": {
+          "name": "phrase_signs_sign_id_signs_local_id_fk",
+          "tableFrom": "phrase_signs",
+          "tableTo": "signs",
+          "columnsFrom": [
+            "sign_id"
+          ],
+          "columnsTo": [
+            "local_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "phrase_signs_phrase_id_sign_id_order_index_pk": {
+          "columns": [
+            "phrase_id",
+            "sign_id",
+            "order_index"
+          ],
+          "name": "phrase_signs_phrase_id_sign_id_order_index_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "phrases": {
+      "name": "phrases",
+      "columns": {
+        "local_id": {
+          "name": "local_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "spanish_translation": {
+          "name": "spanish_translation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lsv_gloss": {
+          "name": "lsv_gloss",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -275,6 +618,49 @@
           "notNull": false,
           "autoincrement": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "learning_motivation": {
+          "name": "learning_motivation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "experience_level": {
+          "name": "experience_level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "avatar_skin_tone": {
+          "name": "avatar_skin_tone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "haptic_feedback": {
+          "name": "haptic_feedback",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": true
+        },
+        "reminder_time": {
+          "name": "reminder_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "birthdate": {
+          "name": "birthdate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {},
@@ -306,6 +692,22 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "icon_name": {
+          "name": "icon_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'BookStack'"
+        },
+        "color_hex": {
+          "name": "color_hex",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'#10B981'"
         }
       },
       "indexes": {},
@@ -314,8 +716,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "sign_modules": {
-      "name": "sign_modules",
+    "sign_execution_hints": {
+      "name": "sign_execution_hints",
       "columns": {
         "id": {
           "name": "id",
@@ -323,6 +725,65 @@
           "primaryKey": true,
           "notNull": true,
           "autoincrement": true
+        },
+        "sign_id": {
+          "name": "sign_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hint_text": {
+          "name": "hint_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sign_execution_hints_sign_id_signs_local_id_fk": {
+          "name": "sign_execution_hints_sign_id_signs_local_id_fk",
+          "tableFrom": "sign_execution_hints",
+          "tableTo": "signs",
+          "columnsFrom": [
+            "sign_id"
+          ],
+          "columnsTo": [
+            "local_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "sign_modules": {
+      "name": "sign_modules",
+      "columns": {
+        "local_id": {
+          "name": "local_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
         },
         "title": {
           "name": "title",
@@ -363,18 +824,25 @@
     "signs": {
       "name": "signs",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
+        "local_id": {
+          "name": "local_id",
+          "type": "text",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": true
+          "autoincrement": false
         },
         "title": {
           "name": "title",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "meanings_json": {
+          "name": "meanings_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "description": {
@@ -393,20 +861,20 @@
         },
         "config_hand_dominant_id": {
           "name": "config_hand_dominant_id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
         "config_hand_recessive_id": {
           "name": "config_hand_recessive_id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "vector_data": {
-          "name": "vector_data",
+        "baked_animation": {
+          "name": "baked_animation",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -440,6 +908,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "learning_tips": {
+          "name": "learning_tips",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {},
@@ -457,93 +932,34 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "signs_config_hand_dominant_id_manual_configurations_id_fk": {
-          "name": "signs_config_hand_dominant_id_manual_configurations_id_fk",
+        "signs_config_hand_dominant_id_manual_configurations_local_id_fk": {
+          "name": "signs_config_hand_dominant_id_manual_configurations_local_id_fk",
           "tableFrom": "signs",
           "tableTo": "manual_configurations",
           "columnsFrom": [
             "config_hand_dominant_id"
           ],
           "columnsTo": [
-            "id"
+            "local_id"
           ],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "signs_config_hand_recessive_id_manual_configurations_id_fk": {
-          "name": "signs_config_hand_recessive_id_manual_configurations_id_fk",
+        "signs_config_hand_recessive_id_manual_configurations_local_id_fk": {
+          "name": "signs_config_hand_recessive_id_manual_configurations_local_id_fk",
           "tableFrom": "signs",
           "tableTo": "manual_configurations",
           "columnsFrom": [
             "config_hand_recessive_id"
           ],
           "columnsTo": [
-            "id"
+            "local_id"
           ],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "signs_modules": {
-      "name": "signs_modules",
-      "columns": {
-        "sign_id": {
-          "name": "sign_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "module_id": {
-          "name": "module_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "signs_modules_sign_id_signs_id_fk": {
-          "name": "signs_modules_sign_id_signs_id_fk",
-          "tableFrom": "signs_modules",
-          "tableTo": "signs",
-          "columnsFrom": [
-            "sign_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "signs_modules_module_id_sign_modules_id_fk": {
-          "name": "signs_modules_module_id_sign_modules_id_fk",
-          "tableFrom": "signs_modules",
-          "tableTo": "sign_modules",
-          "columnsFrom": [
-            "module_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "signs_modules_sign_id_module_id_pk": {
-          "columns": [
-            "sign_id",
-            "module_id"
-          ],
-          "name": "signs_modules_sign_id_module_id_pk"
-        }
-      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
@@ -566,7 +982,7 @@
         },
         "sign_id": {
           "name": "sign_id",
-          "type": "integer",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -627,15 +1043,15 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "user_sign_mastery_sign_id_signs_id_fk": {
-          "name": "user_sign_mastery_sign_id_signs_id_fk",
+        "user_sign_mastery_sign_id_signs_local_id_fk": {
+          "name": "user_sign_mastery_sign_id_signs_local_id_fk",
           "tableFrom": "user_sign_mastery",
           "tableTo": "signs",
           "columnsFrom": [
             "sign_id"
           ],
           "columnsTo": [
-            "id"
+            "local_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"

@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1772505836371,
-      "tag": "0000_tan_mach_iv",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1777519367264,
-      "tag": "0001_calm_the_enforcers",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1777561757563,
-      "tag": "0002_hot_maestro",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1777563883904,
-      "tag": "0003_wet_genesis",
+      "when": 1791496989415,
+      "tag": "0000_groovy_proteus",
       "breakpoints": true
     }
   ]
