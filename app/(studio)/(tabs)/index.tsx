@@ -2,6 +2,7 @@ import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { IconButton } from '@/components/common/IconButton';
 import { Typography } from '@/components/common/Typography';
+import { useCameraServer } from '@/context/CameraServerContext';
 import { useTheme } from '@/hooks/useTheme';
 import { bakeAnimationLocal } from '@/lib/animationBaker';
 import { getConfigHtml } from '@/lib/cameraTemplates';
@@ -19,13 +20,14 @@ export default function StudioConfigScreen() {
   const palette = (colors as any).palette;
   const { hasPermission, requestPermission } = useCameraPermission();
   const isFocused = useIsFocused();
+  
+  const { serverUrl } = useCameraServer();
 
   const [landmarksData, setLandmarksData] = useState<any[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [manualConfigName, setManualConfigName] = useState('');
   const [currentTip, setCurrentTip] = useState('');
   const [learningTips, setLearningTips] = useState<string[]>([]);
-  
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
 
   const isFormValid = manualConfigName.trim().length > 0;
@@ -60,7 +62,6 @@ export default function StudioConfigScreen() {
     if (!isReadyToCapture) return;
 
     const capturedLandmarks = landmarksData[0];
-
     const dummyFrames = [
       { timestamp: 0, pose3D: null, pose2D: null, leftHand: null, rightHand: capturedLandmarks },
       { timestamp: 100, pose3D: null, pose2D: null, leftHand: null, rightHand: capturedLandmarks }
@@ -90,10 +91,11 @@ export default function StudioConfigScreen() {
   };
 
   const htmlContent = useMemo(() => {
+    if (!serverUrl) return '';
     return getConfigHtml(facingMode);
-  }, [facingMode]);
+  }, [serverUrl, facingMode]);
 
-  if (!hasPermission) {
+  if (!hasPermission || !serverUrl) {
     return (
       <View style={[styles.loader, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={palette.deepSkyBlue} />
@@ -124,7 +126,7 @@ export default function StudioConfigScreen() {
           {isFocused && (
             <WebView
               style={styles.webview}
-              source={{ html: htmlContent, baseUrl: 'https://localhost' }}
+              source={{ html: htmlContent, baseUrl: serverUrl }}
               allowsInlineMediaPlayback={true}
               mediaPlaybackRequiresUserAction={false}
               javaScriptEnabled={true}

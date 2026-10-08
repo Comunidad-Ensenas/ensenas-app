@@ -2,90 +2,34 @@ import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { IconButton } from '@/components/common/IconButton';
 import { Typography } from '@/components/common/Typography';
+import { useCameraServer } from '@/context/CameraServerContext';
 import { db } from '@/db';
 import { manualConfigurations } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
 import { bakeAnimationLocal } from '@/lib/animationBaker';
 import { getCaptureHtml } from '@/lib/cameraTemplates';
-import StaticServer from '@dr.pogodin/react-native-static-server';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
-import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router, useLocalSearchParams } from 'expo-router';
-import {
-  Camera,
-  Check,
-  Pause,
-  Plus,
-  Refresh,
-  Search,
-  Settings,
-  Xmark,
-} from 'iconoir-react-native';
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { Camera, Check, Pause, Plus, Refresh, Search, Settings, Xmark } from 'iconoir-react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraPermission } from 'react-native-vision-camera';
 import { WebView } from 'react-native-webview';
 
 const ANIMATIONS_DIRECTORY = `${FileSystem.documentDirectory}ensenas/animations/`;
 
-const assetsToLoad = [
-  {
-    module: require('@/assets/models/pose_landmarker_lite.task'),
-    name: 'pose.task',
-  },
-  {
-    module: require('@/assets/models/hand_landmarker.task'),
-    name: 'hand.task',
-  },
-  {
-    module: require('@/assets/models/vision_bundle.js.bin'),
-    name: 'vision_bundle.js',
-  },
-  {
-    module: require('@/assets/models/vision_wasm_internal.js.bin'),
-    name: 'vision_wasm_internal.js',
-  },
-  {
-    module: require('@/assets/models/vision_wasm_internal.wasm'),
-    name: 'vision_wasm_internal.wasm',
-  },
-];
-
 type AnimationData = {
   duration: number;
-  tracks: Array<{
-    name: string;
-    times: number[];
-    values: number[];
-  }>;
+  tracks: Array<{ name: string; times: number[]; values: number[] }>;
 };
 
 const ensureAnimationsDirectory = async () => {
   const info = await FileSystem.getInfoAsync(ANIMATIONS_DIRECTORY);
   if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(ANIMATIONS_DIRECTORY, {
-      intermediates: true,
-    });
+    await FileSystem.makeDirectoryAsync(ANIMATIONS_DIRECTORY, { intermediates: true });
   }
 };
 
@@ -93,15 +37,7 @@ const saveAnimationLocally = async (fileName: string, animation: AnimationData) 
   await ensureAnimationsDirectory();
   const safeFileName = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
   const fileUri = ANIMATIONS_DIRECTORY + safeFileName;
-  
-  await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(animation), {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-  
-  const info = await FileSystem.getInfoAsync(fileUri);
-  if (!info.exists) {
-    throw new Error('');
-  }
+  await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(animation), { encoding: FileSystem.EncodingType.UTF8 });
   return safeFileName;
 };
 
@@ -109,11 +45,7 @@ const saveRawLocally = async (fileName: string, data: any) => {
   await ensureAnimationsDirectory();
   const safeFileName = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
   const fileUri = ANIMATIONS_DIRECTORY + safeFileName;
-  
-  await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(data), {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-  
+  await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(data), { encoding: FileSystem.EncodingType.UTF8 });
   return safeFileName;
 };
 
@@ -138,6 +70,8 @@ export default function StudioCaptureScreen() {
   const { hasPermission, requestPermission } = useCameraPermission();
   const isFocused = useIsFocused();
   const { signId } = useLocalSearchParams<{ signId?: string }>();
+  
+  const { serverUrl } = useCameraServer();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConfigSelectorOpen, setIsConfigSelectorOpen] = useState(false);
@@ -150,22 +84,18 @@ export default function StudioCaptureScreen() {
   
   const [currentMeaning, setCurrentMeaning] = useState('');
   const [meaningsList, setMeaningsList] = useState<string[]>([]);
-
   const [currentTip, setCurrentTip] = useState('');
   const [learningTips, setLearningTips] = useState<string[]>([]);
   
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   
   const [originalAnimationFile, setOriginalAnimationFile] = useState<string | null>(null);
   const [originalRawFile, setOriginalRawFile] = useState<string | null>(null);
-  const [serverUrl, setServerUrl] = useState('');
 
   const countdownTimerRef = useRef<any>(null);
-  const serverRef = useRef<any>(null);
   const framesBuffer = useRef<any[]>([]);
 
   const isFormValid = meaningsList.length > 0 && selectedDominantConfig !== null;
@@ -240,51 +170,6 @@ export default function StudioCaptureScreen() {
       return () => { cancelled = true; };
     }, [signId])
   );
-
-  useEffect(() => {
-    let isMounted = true;
-    const setupOfflineServer = async () => {
-      try {
-        const wwwPath = `${FileSystem.documentDirectory}www/`;
-        const dirInfo = await FileSystem.getInfoAsync(wwwPath);
-        if (dirInfo.exists) {
-          await FileSystem.deleteAsync(wwwPath, { idempotent: true });
-        }
-        await FileSystem.makeDirectoryAsync(wwwPath, { intermediates: true });
-
-        for (const item of assetsToLoad) {
-          const asset = Asset.fromModule(item.module);
-          await asset.downloadAsync();
-          if (!asset.localUri) throw new Error();
-          await FileSystem.copyAsync({
-            from: asset.localUri,
-            to: wwwPath + item.name,
-          });
-        }
-
-        const serverPath = wwwPath.replace(/^file:\/\//, '');
-        const server = new StaticServer({ port: 0, fileDir: serverPath });
-        const rawUrl = await server.start();
-        const safeUrl = rawUrl.endsWith('/') ? rawUrl : `${rawUrl}/`;
-
-        if (!isMounted) {
-          await server.stop();
-          return;
-        }
-        serverRef.current = server;
-        setServerUrl(safeUrl);
-      } catch (error: any) {}
-    };
-
-    setupOfflineServer();
-    return () => {
-      isMounted = false;
-      if (serverRef.current) {
-        try { serverRef.current.stop(); } catch (error) {}
-        serverRef.current = null;
-      }
-    };
-  }, []);
 
   const onMessage = useCallback((event: any) => {
     try {
@@ -388,12 +273,7 @@ export default function StudioCaptureScreen() {
       const currentSignId = signId || `local_sign_${Date.now()}`;
 
       const rawFileName = await saveRawLocally(`raw_${currentSignId}.json`, framesToSave);
-
-      const animationData = bakeAnimationLocal(
-        framesToSave,
-        selectedRecessiveConfig === null
-      );
-
+      const animationData = bakeAnimationLocal(framesToSave, selectedRecessiveConfig === null);
       const animationFile = `sena_${currentSignId}.json`;
       const savedFileName = await saveAnimationLocally(animationFile, animationData);
 
@@ -472,9 +352,7 @@ export default function StudioCaptureScreen() {
       
       {countdown !== null && (
         <View style={styles.countdownOverlay}>
-          <Typography variant="h1" color="#FFFFFF" style={styles.countdownText}>
-            {countdown}
-          </Typography>
+          <Typography variant="h1" color="#FFFFFF" style={styles.countdownText}>{countdown}</Typography>
         </View>
       )}
 

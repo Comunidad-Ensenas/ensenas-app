@@ -1,3 +1,4 @@
+import { CameraServerProvider } from '@/context/CameraServerContext';
 import { AppThemeProvider } from '@/context/ThemeProvider';
 import { db } from '@/db';
 import { profile } from '@/db/schema';
@@ -104,8 +105,10 @@ export default function RootLayout() {
   }
 
   return (
-    <AppThemeProvider>
-      <RootLayoutNav />
-    </AppThemeProvider>
+    <CameraServerProvider>
+      <AppThemeProvider>
+        <RootLayoutNav />
+      </AppThemeProvider>
+    </CameraServerProvider>
   );
 }
