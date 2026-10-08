@@ -19,11 +19,13 @@ export const profile = sqliteTable('profile', {
 });
 
 export const manualConfigurations = sqliteTable('manual_configurations', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+  localId: text('local_id').primaryKey(),
   code: text('code'),
   name: text('name').notNull(),
   imagePath: text('image_path'),
-  vectorData: text('vector_data').notNull(),
+  rawLandmarks: text('raw_landmarks').notNull(),
+  bakedQuaternions: text('baked_quaternions').notNull(),
+  learningTips: text('learning_tips'),
 });
 
 export const signCategories = sqliteTable('sign_categories', {
@@ -35,7 +37,7 @@ export const signCategories = sqliteTable('sign_categories', {
 });
 
 export const signModules = sqliteTable('sign_modules', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+  localId: text('local_id').primaryKey(),
   title: text('title').notNull(),
   description: text('description'),
   difficultyLevel: integer('difficulty_level').default(1),
@@ -43,30 +45,31 @@ export const signModules = sqliteTable('sign_modules', {
 });
 
 export const signs = sqliteTable('signs', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+  localId: text('local_id').primaryKey(),
   title: text('title').notNull(),
   meaningsJson: text('meanings_json'),
   description: text('description'),
   categoryId: integer('category_id').references(() => signCategories.id),
-  configHandDominantId: integer('config_hand_dominant_id').references(() => manualConfigurations.id),
-  configHandRecessiveId: integer('config_hand_recessive_id').references(() => manualConfigurations.id),
-  vectorData: text('vector_data').notNull(),
+  configHandDominantId: text('config_hand_dominant_id').references(() => manualConfigurations.localId, { onDelete: 'set null' }),
+  configHandRecessiveId: text('config_hand_recessive_id').references(() => manualConfigurations.localId, { onDelete: 'set null' }),
+  bakedAnimation: text('baked_animation').notNull(),
   movementType: text('movement_type'),
   matchThreshold: real('match_threshold').default(0.85),
   nonManualHint: text('non_manual_hint'),
   iconPath: text('icon_path'),
+  learningTips: text('learning_tips'),
 });
 
 export const phrases = sqliteTable('phrases', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+  localId: text('local_id').primaryKey(),
   spanishTranslation: text('spanish_translation').notNull(),
   lsvGloss: text('lsv_gloss').notNull(),
   description: text('description'),
 });
 
 export const phraseSigns = sqliteTable('phrase_signs', {
-  phraseId: integer('phrase_id').notNull().references(() => phrases.id, { onDelete: 'cascade' }),
-  signId: integer('sign_id').notNull().references(() => signs.id, { onDelete: 'cascade' }),
+  phraseId: text('phrase_id').notNull().references(() => phrases.localId, { onDelete: 'cascade' }),
+  signId: text('sign_id').notNull().references(() => signs.localId, { onDelete: 'cascade' }),
   orderIndex: integer('order_index').notNull(),
   transitionDelayMs: integer('transition_delay_ms').default(0),
 }, (table) => [
@@ -75,15 +78,18 @@ export const phraseSigns = sqliteTable('phrase_signs', {
 
 export const moduleItems = sqliteTable('module_items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  moduleId: integer('module_id').notNull().references(() => signModules.id, { onDelete: 'cascade' }),
+  moduleId: text('module_id').notNull().references(() => signModules.localId, { onDelete: 'cascade' }),
   itemType: text('item_type').notNull(),
-  itemId: integer('item_id').notNull(),
+  itemId: text('item_id'),
+  configId: text('config_id').references(() => manualConfigurations.localId, { onDelete: 'cascade' }),
+  signId: text('sign_id').references(() => signs.localId, { onDelete: 'cascade' }),
+  phraseId: text('phrase_id').references(() => phrases.localId, { onDelete: 'cascade' }),
   orderIndex: integer('order_index').notNull(),
 });
 
 export const signExecutionHints = sqliteTable('sign_execution_hints', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  signId: integer('sign_id').notNull().references(() => signs.id, { onDelete: 'cascade' }),
+  signId: text('sign_id').notNull().references(() => signs.localId, { onDelete: 'cascade' }),
   hintText: text('hint_text').notNull(),
   displayOrder: integer('display_order').notNull(),
   durationMs: integer('duration_ms'),
@@ -96,8 +102,8 @@ export const culturalTips = sqliteTable('cultural_tips', {
 });
 
 export const modulePrerequisites = sqliteTable('module_prerequisites', {
-  moduleId: integer('module_id').notNull().references(() => signModules.id, { onDelete: 'cascade' }),
-  requiredModuleId: integer('required_module_id').notNull().references(() => signModules.id, { onDelete: 'cascade' }),
+  moduleId: text('module_id').notNull().references(() => signModules.localId, { onDelete: 'cascade' }),
+  requiredModuleId: text('required_module_id').notNull().references(() => signModules.localId, { onDelete: 'cascade' }),
 }, (table) => [
   primaryKey({ columns: [table.moduleId, table.requiredModuleId] })
 ]);
@@ -105,7 +111,7 @@ export const modulePrerequisites = sqliteTable('module_prerequisites', {
 export const moduleProgress = sqliteTable('module_progress', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   profileId: integer('profile_id').references(() => profile.id).notNull(),
-  moduleId: integer('module_id').references(() => signModules.id).notNull(),
+  moduleId: text('module_id').references(() => signModules.localId).notNull(),
   completionPercentage: real('completion_percentage').default(0.0),
   isUnlocked: integer('is_unlocked', { mode: 'boolean' }).default(false),
   isCompleted: integer('is_completed', { mode: 'boolean' }).default(false),
@@ -118,7 +124,7 @@ export const moduleProgress = sqliteTable('module_progress', {
 export const userSignMastery = sqliteTable('user_sign_mastery', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   profileId: integer('profile_id').references(() => profile.id).notNull(),
-  signId: integer('sign_id').references(() => signs.id).notNull(),
+  signId: text('sign_id').references(() => signs.localId).notNull(),
   masteryLevel: integer('mastery_level').default(0),
   correctAttempts: integer('correct_attempts').default(0),
   wrongAttempts: integer('wrong_attempts').default(0),

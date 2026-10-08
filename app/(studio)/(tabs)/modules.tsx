@@ -3,12 +3,12 @@ import { Card } from '@/components/common/Card';
 import { IconButton } from '@/components/common/IconButton';
 import { Typography } from '@/components/common/Typography';
 import { db } from '@/db';
-import { phrases, signs } from '@/db/schema';
+import { manualConfigurations, phrases, signs } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChatBubble, Check, Plus, Search, VideoCamera, Xmark } from 'iconoir-react-native';
+import { ChatBubble, Check, DragHandGesture, Plus, Search, VideoCamera, Xmark } from 'iconoir-react-native';
 import React, { useCallback, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,20 +24,41 @@ export default function StudioModuleScreen() {
   const [difficultyLevel, setDifficultyLevel] = useState(1);
   const [moduleItems, setModuleItems] = useState<any[]>([]);
 
+  const [availableConfigs, setAvailableConfigs] = useState<any[]>([]);
   const [availableSigns, setAvailableSigns] = useState<any[]>([]);
   const [availablePhrases, setAvailablePhrases] = useState<any[]>([]);
   
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'signs' | 'phrases'>('signs');
+  const [activeTab, setActiveTab] = useState<'configs' | 'signs' | 'phrases'>('signs');
   const [searchQuery, setSearchQuery] = useState('');
 
   useFocusEffect(
     useCallback(() => {
       const fetchData = async () => {
         try {
+          const dbConfigs = await db.select().from(manualConfigurations);
+          const formattedDbConfigs = dbConfigs.map(c => ({
+            id: c.localId, 
+            label: c.name,
+            type: 'config',
+            isLocal: false
+          }));
+
+          const localConfigsStr = await AsyncStorage.getItem('@ensenas_manual_configs');
+          const localConfigsData = localConfigsStr ? JSON.parse(localConfigsStr) : [];
+          const formattedLocalConfigs = localConfigsData.map((item: any) => ({
+            id: item.local_id || item.timestamp,
+            label: item.name || 'Configuración sin nombre',
+            type: 'config',
+            isLocal: true
+          }));
+
+          const allConfigs = [...formattedLocalConfigs, ...formattedDbConfigs];
+          setAvailableConfigs(allConfigs);
+
           const dbSigns = await db.select().from(signs);
           const formattedDbSigns = dbSigns.map(s => ({
-            id: s.id,
+            id: s.localId,
             label: s.meaningsJson ? JSON.parse(s.meaningsJson)[0] : s.title,
             type: 'sign',
             isLocal: false
@@ -45,8 +66,8 @@ export default function StudioModuleScreen() {
 
           const localSignsStr = await AsyncStorage.getItem('@ensenas_recorded_signs');
           const localSignsData = localSignsStr ? JSON.parse(localSignsStr) : [];
-          const formattedLocalSigns = localSignsData.map((item: any, index: number) => ({
-            id: `local_sign_${item.timestamp || index}`,
+          const formattedLocalSigns = localSignsData.map((item: any) => ({
+            id: item.local_id || item.timestamp,
             label: item.meanings?.[0] || 'Seña sin nombre',
             type: 'sign',
             isLocal: true
@@ -57,7 +78,7 @@ export default function StudioModuleScreen() {
 
           const dbPhrases = await db.select().from(phrases);
           const formattedDbPhrases = dbPhrases.map(p => ({
-            id: p.id,
+            id: p.localId,
             label: p.spanishTranslation,
             type: 'phrase',
             isLocal: false
@@ -65,9 +86,9 @@ export default function StudioModuleScreen() {
 
           const localPhrasesStr = await AsyncStorage.getItem('@ensenas_recorded_phrases');
           const localPhrasesData = localPhrasesStr ? JSON.parse(localPhrasesStr) : [];
-          const formattedLocalPhrases = localPhrasesData.map((item: any, index: number) => ({
-            id: item.id || `local_phrase_${item.timestamp || index}`,
-            label: item.spanishTranslation,
+          const formattedLocalPhrases = localPhrasesData.map((item: any) => ({
+            id: item.id || item.local_id,
+            label: item.spanish_translation,
             type: 'phrase',
             isLocal: true
           }));
@@ -83,26 +104,29 @@ export default function StudioModuleScreen() {
             if (moduleToEdit) {
               setTitle(moduleToEdit.title);
               setDescription(moduleToEdit.description || '');
-              setDifficultyLevel(moduleToEdit.difficultyLevel || 1);
+              setDifficultyLevel(moduleToEdit.difficulty_level || 1);
 
-              const loadedItems = moduleToEdit.items.map((item: any, index: number) => {
+              const loadedItems = moduleToEdit.items_list.map((item: any) => {
                 let label = 'Elemento eliminado o desconocido';
                 let isLocal = false;
                 
-                if (item.itemType === 'sign') {
-                  const foundSign = allSigns.find(s => s.id === item.itemId);
+                if (item.item_type === 'config') {
+                  const foundConfig = allConfigs.find(c => c.id === item.config_id);
+                  if (foundConfig) { label = foundConfig.label; isLocal = foundConfig.isLocal; }
+                } else if (item.item_type === 'sign') {
+                  const foundSign = allSigns.find(s => s.id === item.sign_id);
                   if (foundSign) { label = foundSign.label; isLocal = foundSign.isLocal; }
                 } else {
-                  const foundPhrase = allPhrases.find(p => p.id === item.itemId);
+                  const foundPhrase = allPhrases.find(p => p.id === item.phrase_id);
                   if (foundPhrase) { label = foundPhrase.label; isLocal = foundPhrase.isLocal; }
                 }
 
                 return {
-                  id: item.itemId,
+                  id: item.config_id || item.sign_id || item.phrase_id,
                   label,
-                  type: item.itemType,
+                  type: item.item_type,
                   isLocal,
-                  listId: `loaded_${item.itemId}_${index}_${Date.now()}`
+                  listId: `loaded_${item.item_type}_${item.order_index}_${Date.now()}`
                 };
               });
 
@@ -114,10 +138,7 @@ export default function StudioModuleScreen() {
             setDifficultyLevel(1);
             setModuleItems([]);
           }
-
-        } catch (e) {
-          console.error("Error cargando datos:", e);
-        }
+        } catch (e) {}
       };
       
       fetchData();
@@ -147,15 +168,14 @@ export default function StudioModuleScreen() {
         id: targetId,
         title: title.trim(),
         description: description.trim(),
-        difficultyLevel,
-        items: moduleItems.map((item, index) => ({
-          itemType: item.type,
-          itemId: item.id,
-          orderIndex: index
-        })),
-        timestamp: moduleId 
-          ? (currentData.find((m:any) => m.id === moduleId)?.timestamp || new Date().toISOString()) 
-          : new Date().toISOString()
+        difficulty_level: difficultyLevel,
+        items_list: moduleItems.map((item, index) => ({
+          item_type: item.type,
+          config_id: item.type === 'config' ? item.id : null,
+          sign_id: item.type === 'sign' ? item.id : null,
+          phrase_id: item.type === 'phrase' ? item.id : null,
+          order_index: index
+        }))
       };
 
       if (moduleId) {
@@ -178,7 +198,7 @@ export default function StudioModuleScreen() {
     }
   };
 
-  const activeData = activeTab === 'signs' ? availableSigns : availablePhrases;
+  const activeData = activeTab === 'configs' ? availableConfigs : activeTab === 'signs' ? availableSigns : availablePhrases;
   const filteredData = activeData.filter(item => 
     item.label.toLowerCase().includes(searchQuery.toLowerCase().trim())
   );
@@ -252,15 +272,17 @@ export default function StudioModuleScreen() {
           <View style={styles.itemsListContainer}>
             {moduleItems.map((item, index) => (
               <View key={item.listId} style={[styles.moduleItemRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.itemTypeIcon, { backgroundColor: item.type === 'sign' ? `${palette.deepSkyBlue}20` : `${palette.powderBlush}20` }]}>
-                  {item.type === 'sign' 
-                    ? <VideoCamera width={20} height={20} color={palette.deepSkyBlue} strokeWidth={2} />
+                <View style={[styles.itemTypeIcon, { backgroundColor: item.type === 'config' ? `${palette.deepSkyBlue}20` : item.type === 'sign' ? `${colors.success}20` : `${palette.powderBlush}20` }]}>
+                  {item.type === 'config' 
+                    ? <DragHandGesture width={20} height={20} color={palette.deepSkyBlue} strokeWidth={2} />
+                    : item.type === 'sign' 
+                    ? <VideoCamera width={20} height={20} color={colors.success} strokeWidth={2} />
                     : <ChatBubble width={20} height={20} color={palette.powderBlush} strokeWidth={2} />
                   }
                 </View>
                 <View style={styles.itemInfo}>
                   <Typography variant="body" color={colors.text} style={{ fontWeight: '600' }}>{item.label}</Typography>
-                  <Typography variant="label" color={colors.textSecondary}>{item.type === 'sign' ? 'Seña Individual' : 'Frase'}</Typography>
+                  <Typography variant="label" color={colors.textSecondary}>{item.type === 'config' ? 'Configuración' : item.type === 'sign' ? 'Seña Individual' : 'Frase'}</Typography>
                 </View>
                 <Typography variant="h3" color={colors.textSecondary} style={{ marginRight: 16 }}>#{index + 1}</Typography>
                 <Pressable onPress={() => handleRemoveItem(item.listId)} style={[styles.removeItemBtn, { backgroundColor: colors.input }]}>
@@ -274,7 +296,7 @@ export default function StudioModuleScreen() {
               onPress={() => setIsSelectorOpen(true)}
             >
               <Plus width={24} height={24} color={palette.deepSkyBlue} strokeWidth={2.5} />
-              <Typography variant="body" color={palette.deepSkyBlue} style={{ fontWeight: '600', marginLeft: 8 }}>Agregar Seña o Frase</Typography>
+              <Typography variant="body" color={palette.deepSkyBlue} style={{ fontWeight: '600', marginLeft: 8 }}>Agregar Elemento</Typography>
             </Pressable>
           </View>
         </View>
@@ -305,10 +327,18 @@ export default function StudioModuleScreen() {
 
             <View style={styles.tabsContainer}>
               <Pressable 
+                style={[styles.tabBtn, activeTab === 'configs' && { borderBottomColor: palette.deepSkyBlue }]} 
+                onPress={() => { setActiveTab('configs'); setSearchQuery(''); }}
+              >
+                <Typography variant="label" color={activeTab === 'configs' ? palette.deepSkyBlue : colors.textSecondary} style={{ fontWeight: activeTab === 'configs' ? '800' : '600' }}>
+                  Configs
+                </Typography>
+              </Pressable>
+              <Pressable 
                 style={[styles.tabBtn, activeTab === 'signs' && { borderBottomColor: palette.deepSkyBlue }]} 
                 onPress={() => { setActiveTab('signs'); setSearchQuery(''); }}
               >
-                <Typography variant="body" color={activeTab === 'signs' ? palette.deepSkyBlue : colors.textSecondary} style={{ fontWeight: activeTab === 'signs' ? '700' : '500' }}>
+                <Typography variant="label" color={activeTab === 'signs' ? palette.deepSkyBlue : colors.textSecondary} style={{ fontWeight: activeTab === 'signs' ? '800' : '600' }}>
                   Señas
                 </Typography>
               </Pressable>
@@ -316,7 +346,7 @@ export default function StudioModuleScreen() {
                 style={[styles.tabBtn, activeTab === 'phrases' && { borderBottomColor: palette.deepSkyBlue }]} 
                 onPress={() => { setActiveTab('phrases'); setSearchQuery(''); }}
               >
-                <Typography variant="body" color={activeTab === 'phrases' ? palette.deepSkyBlue : colors.textSecondary} style={{ fontWeight: activeTab === 'phrases' ? '700' : '500' }}>
+                <Typography variant="label" color={activeTab === 'phrases' ? palette.deepSkyBlue : colors.textSecondary} style={{ fontWeight: activeTab === 'phrases' ? '800' : '600' }}>
                   Frases
                 </Typography>
               </Pressable>
@@ -327,7 +357,7 @@ export default function StudioModuleScreen() {
                 <Search width={20} height={20} color={colors.textSecondary} />
                 <TextInput
                   style={[styles.searchInput, { color: colors.text }]}
-                  placeholder={`Buscar ${activeTab === 'signs' ? 'seña' : 'frase'}...`}
+                  placeholder={`Buscar ${activeTab === 'configs' ? 'configuración' : activeTab === 'signs' ? 'seña' : 'frase'}...`}
                   placeholderTextColor={colors.textSecondary}
                   value={searchQuery}
                   onChangeText={setSearchQuery}

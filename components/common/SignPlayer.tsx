@@ -22,6 +22,9 @@ type SignPlayerProps = {
   animData?: AnimationData | null;
   width?: number;
   height?: number;
+  cameraPosition?: [number, number, number];
+  orbitTarget?: [number, number, number];
+  isConfigPreview?: boolean;
 };
 
 function getAnimationFile(animationFile: string): File {
@@ -44,6 +47,9 @@ export default function SignPlayer({
   animData: externalAnimData = null,
   width = 320,
   height = 320,
+  cameraPosition = [0, 0, 5],
+  orbitTarget = [0, 0, 0],
+  isConfigPreview = false,
 }: SignPlayerProps) {
   const [animData, setAnimData] = useState<AnimationData | null>(externalAnimData);
   const [loadingAnimation, setLoadingAnimation] = useState(false);
@@ -124,7 +130,7 @@ export default function SignPlayer({
       {canvasReady && (
         <Canvas
           camera={{
-            position: [0, 0, 5],
+            position: cameraPosition,
             fov: 40,
             near: 0.01,
             far: 100,
@@ -134,8 +140,13 @@ export default function SignPlayer({
             alpha: true,
           }}
         >
-          <OrbitControls enablePan={false} minDistance={1} maxDistance={6} />
-          <AvatarModel animData={animData} position={[0, -2.5, 0]} scale={2} />
+          <OrbitControls enablePan={false} minDistance={1} maxDistance={6} target={orbitTarget} />
+          <AvatarModel 
+            animData={animData} 
+            position={[0, -2.5, 0]} 
+            scale={2} 
+            isConfigPreview={isConfigPreview} 
+          />
         </Canvas>
       )}
     </View>

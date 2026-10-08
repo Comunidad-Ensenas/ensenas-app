@@ -14,6 +14,7 @@ type AvatarModelProps = {
   animData?: AnimationData | null;
   position?: [number, number, number];
   scale?: number;
+  isConfigPreview?: boolean;
 };
 
 const BONE_TO_VRM: Record<string, string> = {
@@ -89,11 +90,15 @@ async function loadNativeTexture(moduleId: number): Promise<THREE.Texture> {
   return texture;
 }
 
-export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1 }: AvatarModelProps) {
+export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1, isConfigPreview = false }: AvatarModelProps) {
   const [vrm, setVrm] = useState<any>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const actionRef = useRef<THREE.AnimationAction | null>(null);
   const textureRef = useRef<THREE.Texture | null>(null);
+
+  const leftUpperArmRestQuat = useRef(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 1.2));
+  const leftLowerArmFlexQuat = useRef(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -2.0));
+  const leftHandFixQuat = useRef(new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.5, 0, -1.0)));
 
   useEffect(() => {
     let cancelled = false;
@@ -241,7 +246,25 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1 
 
   useFrame((_, delta) => {
     if (!vrm) return;
+    
     if (mixerRef.current) mixerRef.current.update(delta);
+
+    if (isConfigPreview && vrm.humanoid) {
+      const lUpper = vrm.humanoid.getNormalizedBoneNode('leftUpperArm') || vrm.humanoid.getRawBoneNode('leftUpperArm');
+      const lLower = vrm.humanoid.getNormalizedBoneNode('leftLowerArm') || vrm.humanoid.getRawBoneNode('leftLowerArm');
+      const lHand = vrm.humanoid.getNormalizedBoneNode('leftHand') || vrm.humanoid.getRawBoneNode('leftHand');
+      
+      if (lUpper) {
+        lUpper.quaternion.copy(leftUpperArmRestQuat.current);
+      }
+      if (lLower) {
+        lLower.quaternion.copy(leftLowerArmFlexQuat.current);
+      }
+      if (lHand) {
+        lHand.quaternion.copy(leftHandFixQuat.current);
+      }
+    }
+
     vrm.update(delta);
   });
 

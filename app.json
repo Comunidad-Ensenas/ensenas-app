@@ -41,8 +41,6 @@
       "expo-router",
       "expo-sqlite",
       "expo-asset",
-      "react-native-fast-tflite",
-      "expo-sharing",
       [
         "react-native-vision-camera",
         {

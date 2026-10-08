@@ -103,6 +103,18 @@ const saveAnimationLocally = async (fileName: string, animation: AnimationData) 
   return safeFileName;
 };
 
+const saveRawLocally = async (fileName: string, data: any) => {
+  await ensureAnimationsDirectory();
+  const safeFileName = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
+  const fileUri = ANIMATIONS_DIRECTORY + safeFileName;
+  
+  await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(data), {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+  
+  return safeFileName;
+};
+
 const extractAnimationFileName = (value?: string | null) => {
   if (!value) return null;
   const trimmed = value.trim();
@@ -113,6 +125,7 @@ const extractAnimationFileName = (value?: string | null) => {
 };
 
 const getStoredAnimationFile = (sign: any) => {
+  if (sign?.baked_animation) return sign.baked_animation;
   if (sign?.animationFile) return sign.animationFile;
   return extractAnimationFileName(sign?.animationUrl);
 };
@@ -135,12 +148,16 @@ export default function StudioCaptureScreen() {
   
   const [currentMeaning, setCurrentMeaning] = useState('');
   const [meaningsList, setMeaningsList] = useState<string[]>([]);
+
+  const [currentTip, setCurrentTip] = useState('');
+  const [learningTips, setLearningTips] = useState<string[]>([]);
   
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isReady, setIsReady] = useState(false);
   
   const [originalAnimationFile, setOriginalAnimationFile] = useState<string | null>(null);
+  const [originalRawFile, setOriginalRawFile] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState('');
 
   const countdownTimerRef = useRef<any>(null);
@@ -171,11 +188,11 @@ export default function StudioCaptureScreen() {
 
           const localData = localDataStr ? JSON.parse(localDataStr) : [];
           const formattedLocalConfigs = localData.map((item: any, index: number) => ({
-            id: `local_${item.timestamp || index}`,
+            id: item.local_id || `local_config_${item.timestamp || index}`,
             name: item.name,
             code: null,
             imagePath: null,
-            vectorData: JSON.stringify(item.landmarks),
+            vectorData: JSON.stringify(item.raw_landmarks || item.landmarks),
             isLocal: true,
           }));
 
@@ -186,29 +203,31 @@ export default function StudioCaptureScreen() {
           if (signId) {
             const storedSignsStr = await AsyncStorage.getItem('@ensenas_recorded_signs');
             const storedSigns = storedSignsStr ? JSON.parse(storedSignsStr) : [];
-            const signToEdit = storedSigns.find((s: any) => s.timestamp === signId);
+            const signToEdit = storedSigns.find((s: any) => s.local_id === signId || s.timestamp === signId);
 
             if (signToEdit) {
               setMeaningsList(signToEdit.meanings || []);
+              setLearningTips(signToEdit.learning_tips || []);
               setOriginalAnimationFile(getStoredAnimationFile(signToEdit));
+              setOriginalRawFile(signToEdit.raw_frames || null);
 
-              const domConfig = combinedConfigs.find(
-                (c) => c.id === signToEdit.configHandDominantId || c.id === `local_${signToEdit.configHandDominantId}`
-              );
+              const domConfigId = signToEdit.dominant_config_id || signToEdit.configHandDominantId || `local_${signToEdit.configHandDominantId}`;
+              const domConfig = combinedConfigs.find((c) => c.id === domConfigId);
               if (domConfig) setSelectedDominantConfig(domConfig);
 
-              if (signToEdit.configHandRecessiveId) {
-                const recConfig = combinedConfigs.find(
-                  (c) => c.id === signToEdit.configHandRecessiveId || c.id === `local_${signToEdit.configHandRecessiveId}`
-                );
+              const recConfigId = signToEdit.recessive_config_id || signToEdit.configHandRecessiveId || `local_${signToEdit.configHandRecessiveId}`;
+              if (recConfigId) {
+                const recConfig = combinedConfigs.find((c) => c.id === recConfigId);
                 if (recConfig) setSelectedRecessiveConfig(recConfig);
               }
             }
           } else {
             setMeaningsList([]);
+            setLearningTips([]);
             setSelectedDominantConfig(null);
             setSelectedRecessiveConfig(null);
             setOriginalAnimationFile(null);
+            setOriginalRawFile(null);
           }
         } catch (error) {}
       };
@@ -295,20 +314,34 @@ export default function StudioCaptureScreen() {
     setMeaningsList(meaningsList.filter((meaning) => meaning !== meaningToRemove));
   };
 
+  const handleAddTip = () => {
+    const trimmedTip = currentTip.trim();
+    if (trimmedTip && !learningTips.includes(trimmedTip)) {
+      setLearningTips([...learningTips, trimmedTip]);
+      setCurrentTip('');
+    }
+  };
+
+  const handleRemoveTip = (tipToRemove: string) => {
+    setLearningTips(learningTips.filter((tip) => tip !== tipToRemove));
+  };
+
   const saveEditedMetadataOnly = async () => {
     if (!selectedDominantConfig || meaningsList.length === 0) return;
     try {
       const storedData = await AsyncStorage.getItem('@ensenas_recorded_signs');
       let currentData = storedData ? JSON.parse(storedData) : [];
       const updatedSign = {
-        configHandDominantId: selectedDominantConfig.id,
-        configHandRecessiveId: selectedRecessiveConfig?.id || null,
+        local_id: signId,
+        dominant_config_id: selectedDominantConfig.id,
+        recessive_config_id: selectedRecessiveConfig?.id || null,
         meanings: meaningsList,
-        animationFile: originalAnimationFile,
-        timestamp: signId,
+        learning_tips: learningTips,
+        baked_animation: originalAnimationFile,
+        raw_frames: originalRawFile
       };
 
-      currentData = currentData.map((s: any) => s.timestamp === signId ? { ...s, ...updatedSign } : s);
+      currentData = currentData.map((s: any) => (s.local_id === signId || s.timestamp === signId) ? { ...s, ...updatedSign } : s);
       await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify(currentData));
       router.back();
     } catch (error) {}
@@ -348,7 +381,9 @@ export default function StudioCaptureScreen() {
 
     try {
       const framesToSave = framesBuffer.current;
-      const currentSignId = signId || Date.now().toString();
+      const currentSignId = signId || `local_sign_${Date.now()}`;
+
+      const rawFileName = await saveRawLocally(`raw_${currentSignId}.json`, framesToSave);
 
       const animationData = bakeAnimationLocal(
         framesToSave,
@@ -359,18 +394,20 @@ export default function StudioCaptureScreen() {
       const savedFileName = await saveAnimationLocally(animationFile, animationData);
 
       const newSign = {
-        configHandDominantId: selectedDominantConfig.id,
-        configHandRecessiveId: selectedRecessiveConfig?.id || null,
+        local_id: currentSignId,
+        dominant_config_id: selectedDominantConfig.id,
+        recessive_config_id: selectedRecessiveConfig?.id || null,
         meanings: meaningsList,
-        animationFile: savedFileName,
-        timestamp: currentSignId,
+        learning_tips: learningTips,
+        baked_animation: savedFileName,
+        raw_frames: rawFileName
       };
 
       const storedData = await AsyncStorage.getItem('@ensenas_recorded_signs');
       let currentData = storedData ? JSON.parse(storedData) : [];
 
       if (signId) {
-        currentData = currentData.map((s: any) => s.timestamp === signId ? { ...s, ...newSign } : s);
+        currentData = currentData.map((s: any) => (s.local_id === signId || s.timestamp === signId) ? { ...s, ...newSign } : s);
         await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify(currentData));
         router.back();
         return;
@@ -379,9 +416,12 @@ export default function StudioCaptureScreen() {
       await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify([...currentData, newSign]));
       setMeaningsList([]);
       setCurrentMeaning('');
+      setLearningTips([]);
+      setCurrentTip('');
       setSelectedDominantConfig(null);
       setSelectedRecessiveConfig(null);
       setOriginalAnimationFile(null);
+      setOriginalRawFile(null);
       framesBuffer.current = [];
     } catch (error: any) {
       Alert.alert('Error', 'No se pudo generar la animación localmente.');
@@ -639,6 +679,34 @@ export default function StudioCaptureScreen() {
                   <View key={index} style={[styles.chip, { backgroundColor: palette.deepSkyBlue }]}>
                     <Typography variant="label" color="#FFFFFF">{meaning}</Typography>
                     <Pressable onPress={() => handleRemoveMeaning(meaning)} style={styles.chipRemoveBtn}>
+                      <Xmark width={16} height={16} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <Typography variant="subtitle" color={colors.textSecondary} style={styles.marginTop24}>TIPS DE APRENDIZAJE (OPCIONAL)</Typography>
+            <View style={styles.inputRow}>
+              <TextInput 
+                style={[styles.input, { color: colors.text, backgroundColor: colors.input, borderColor: currentTip ? palette.deepSkyBlue : 'transparent' }]} 
+                placeholder="Ej: Recuerda la postura recta..."
+                placeholderTextColor={colors.textSecondary}
+                value={currentTip} 
+                onChangeText={setCurrentTip} 
+                onSubmitEditing={handleAddTip} 
+              />
+              <Pressable style={[styles.addBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={handleAddTip} disabled={!currentTip.trim()}>
+                <Plus width={24} height={24} color={currentTip.trim() ? palette.deepSkyBlue : colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={styles.meaningsWrapper}>
+              <View style={styles.chipsWrapContainer}>
+                {learningTips.map((tip, index) => (
+                  <View key={`tip-${index}`} style={[styles.chip, { backgroundColor: palette.deepSkyBlue }]}>
+                    <Typography variant="label" color="#FFFFFF">{tip}</Typography>
+                    <Pressable onPress={() => handleRemoveTip(tip)} style={styles.chipRemoveBtn}>
                       <Xmark width={16} height={16} color="#FFFFFF" />
                     </Pressable>
                   </View>

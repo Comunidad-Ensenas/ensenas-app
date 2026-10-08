@@ -51,7 +51,7 @@ export default function StudioExportScreen() {
 
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
-  const [selectedItemType, setSelectedItemType] = useState<'sign' | 'phrase' | 'module' | null>(null);
+  const [selectedItemType, setSelectedItemType] = useState<'config' | 'sign' | 'phrase' | 'module' | null>(null);
 
   const [data, setData] = useState({
     configs: [] as any[],
@@ -75,29 +75,27 @@ export default function StudioExportScreen() {
         phrases: p ? JSON.parse(p) : [],
         modules: m ? JSON.parse(m) : []
       });
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   };
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
 
   const getConfigName = (idToFind: string) => {
     if (!idToFind) return 'Ninguna';
-    const config = data.configs.find(c => c.timestamp === idToFind || `local_${c.timestamp}` === idToFind);
+    const config = data.configs.find(c => c.local_id === idToFind);
     return config?.name || 'Configuración eliminada';
   };
 
   const getSignName = (idToFind: string) => {
     if (!idToFind) return 'Desconocida';
-    const sign = data.signs.find(s => s.timestamp === idToFind || `local_sign_${s.timestamp}` === idToFind);
+    const sign = data.signs.find(s => s.local_id === idToFind);
     return sign?.meanings?.[0] || 'Seña eliminada';
   };
 
   const getPhraseName = (idToFind: string) => {
     if (!idToFind) return 'Desconocida';
-    const phrase = data.phrases.find(p => p.id === idToFind);
-    return phrase?.spanishTranslation || 'Frase eliminada';
+    const phrase = data.phrases.find(p => p.local_id === idToFind);
+    return phrase?.spanish_translation || 'Frase eliminada';
   };
 
   const saveAllData = async (newData: typeof data) => {
@@ -116,62 +114,46 @@ export default function StudioExportScreen() {
     let deletedPhraseIds = new Set<string>();
 
     if (type === 'config') {
-      configs = configs.filter(c => c.timestamp !== targetId);
+      configs = configs.filter(c => c.local_id !== targetId);
       signs.forEach(s => {
-        if (
-          s.configHandDominantId === targetId || s.configHandRecessiveId === targetId ||
-          s.configHandDominantId === `local_${targetId}` || s.configHandRecessiveId === `local_${targetId}`
-        ) {
-          deletedSignIds.add(s.timestamp);
+        if (s.dominant_config_id === targetId || s.recessive_config_id === targetId) {
+          deletedSignIds.add(s.local_id);
         }
       });
-      signs = signs.filter(s => !deletedSignIds.has(s.timestamp));
+      signs = signs.filter(s => !deletedSignIds.has(s.local_id));
     }
 
     if (type === 'sign') {
       deletedSignIds.add(targetId);
-      signs = signs.filter(s => !deletedSignIds.has(s.timestamp));
+      signs = signs.filter(s => !deletedSignIds.has(s.local_id));
     }
 
     if (deletedSignIds.size > 0 || type === 'phrase') {
       if (type === 'phrase') deletedPhraseIds.add(targetId);
 
       phrases = phrases.map(p => {
-        const keptSigns = p.signs.filter((s: any) => {
-          let isDeleted = false;
-          deletedSignIds.forEach(delId => {
-            if (s.signId === delId || s.signId === `local_sign_${delId}`) isDeleted = true;
-          });
-          return !isDeleted;
-        });
-        return { ...p, signs: keptSigns };
+        const keptSigns = p.signs_list.filter((s: any) => !deletedSignIds.has(s.sign_id));
+        return { ...p, signs_list: keptSigns };
       }).filter(p => {
-        if (p.signs.length === 0) deletedPhraseIds.add(p.id);
-        if (type === 'phrase' && p.id === targetId) deletedPhraseIds.add(p.id);
-        return p.signs.length > 0 && p.id !== targetId;
+        if (p.signs_list.length === 0) deletedPhraseIds.add(p.local_id);
+        if (type === 'phrase' && p.local_id === targetId) deletedPhraseIds.add(p.local_id);
+        return p.signs_list.length > 0 && p.local_id !== targetId;
       });
     }
 
     if (deletedSignIds.size > 0 || deletedPhraseIds.size > 0 || type === 'module') {
       modules = modules.map(m => {
-        const keptItems = m.items.filter((item: any) => {
-          if (item.itemType === 'sign') {
-            let isDeleted = false;
-            deletedSignIds.forEach(delId => {
-              if (item.itemId === delId || item.itemId === `local_sign_${delId}`) isDeleted = true;
-            });
-            return !isDeleted;
-          }
-          if (item.itemType === 'phrase') {
-            return !deletedPhraseIds.has(item.itemId);
-          }
+        const keptItems = m.items_list.filter((item: any) => {
+          if (item.item_type === 'sign') return !deletedSignIds.has(item.sign_id);
+          if (item.item_type === 'phrase') return !deletedPhraseIds.has(item.phrase_id);
+          if (item.item_type === 'config') return configs.some(c => c.local_id === item.config_id);
           return true;
         });
-        return { ...m, items: keptItems };
+        return { ...m, items_list: keptItems };
       });
 
       if (type === 'module') {
-        modules = modules.filter(m => m.id !== targetId);
+        modules = modules.filter(m => m.local_id !== targetId);
       }
     }
 
@@ -179,31 +161,31 @@ export default function StudioExportScreen() {
     setIsDetailOpen(false);
   };
 
-  const handleDeleteConfig = (timestamp: string) => {
+  const handleDeleteConfig = (targetId: string) => {
     Alert.alert("¿Borrar Configuración?", "Se eliminarán en cascada TODAS las señas, frases y módulos que dependan de esta configuración para evitar corromper los datos.", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Borrar en Cascada", style: "destructive", onPress: () => executeCascadeDelete('config', timestamp) }
+      { text: "Borrar en Cascada", style: "destructive", onPress: () => executeCascadeDelete('config', targetId) }
     ]);
   };
 
-  const handleDeleteSign = (signId: string) => {
+  const handleDeleteSign = (targetId: string) => {
     Alert.alert("¿Borrar Seña?", "Se eliminará también de las Frases y Módulos que la utilicen.", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Borrar en Cascada", style: "destructive", onPress: () => executeCascadeDelete('sign', signId) }
+      { text: "Borrar en Cascada", style: "destructive", onPress: () => executeCascadeDelete('sign', targetId) }
     ]);
   };
 
-  const handleDeletePhrase = (phraseId: string) => {
+  const handleDeletePhrase = (targetId: string) => {
     Alert.alert("¿Borrar Frase?", "Se eliminará también de los Módulos que la utilicen.", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Borrar en Cascada", style: "destructive", onPress: () => executeCascadeDelete('phrase', phraseId) }
+      { text: "Borrar en Cascada", style: "destructive", onPress: () => executeCascadeDelete('phrase', targetId) }
     ]);
   };
 
-  const handleDeleteModule = (moduleId: string) => {
+  const handleDeleteModule = (targetId: string) => {
     Alert.alert("¿Borrar Módulo?", "Solo se borrará el módulo, el contenido seguirá existiendo.", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Borrar", style: "destructive", onPress: () => executeCascadeDelete('module', moduleId) }
+      { text: "Borrar", style: "destructive", onPress: () => executeCascadeDelete('module', targetId) }
     ]);
   };
 
@@ -219,7 +201,7 @@ export default function StudioExportScreen() {
     ]);
   };
 
-  const openDetails = (item: any, type: 'sign' | 'phrase' | 'module') => {
+  const openDetails = (item: any, type: 'config' | 'sign' | 'phrase' | 'module') => {
     setSelectedItem(item);
     setSelectedItemType(type);
     setIsDetailOpen(true);
@@ -230,11 +212,11 @@ export default function StudioExportScreen() {
     setIsExplorerOpen(false);
 
     if (selectedItemType === 'module') {
-      router.push({ pathname: './modules', params: { moduleId: selectedItem.id } } as any);
+      router.push({ pathname: './modules', params: { moduleId: selectedItem.local_id } } as any);
     } else if (selectedItemType === 'phrase') {
-      router.push({ pathname: '/phrases', params: { phraseId: selectedItem.id } } as any);
+      router.push({ pathname: '/phrases', params: { phraseId: selectedItem.local_id } } as any);
     } else if (selectedItemType === 'sign') {
-      router.push({ pathname: '/capture', params: { signId: selectedItem.timestamp } } as any);
+      router.push({ pathname: '/capture', params: { signId: selectedItem.local_id } } as any);
     }
   };
 
@@ -242,21 +224,22 @@ export default function StudioExportScreen() {
     switch (activeTab) {
       case 'configs':
         return data.configs.map((item, index) => (
-          <View key={item.timestamp} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
-            <View style={styles.listItemPressable}>
+          <View key={item.local_id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
+            <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'config')}>
               <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
               <IconBox size={44} icon={<DragHandGesture width={24} height={24} color={palette.deepSkyBlue} />} backgroundColor={palette.deepSkyBlue + '20'} style={{ marginHorizontal: 12 }} />
               <View style={{ flex: 1 }}>
                 <Typography variant="body" style={{ fontWeight: '800' }}>{item.name}</Typography>
                 <Typography variant="label" color={colors.textSecondary}>Configuración manual</Typography>
               </View>
-            </View>
-            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteConfig(item.timestamp)} style={{ marginLeft: 8, marginRight: 8 }} />
+              <NavArrowRight width={24} height={24} color={colors.icon} />
+            </Pressable>
+            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteConfig(item.local_id)} style={{ marginLeft: 8, marginRight: 8 }} />
           </View>
         ));
       case 'signs':
         return data.signs.map((item, index) => (
-          <View key={item.timestamp} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
+          <View key={item.local_id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
             <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'sign')}>
               <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
               <IconBox size={44} icon={<VideoCamera width={24} height={24} color={colors.success} />} backgroundColor={colors.successBg} style={{ marginHorizontal: 12 }} />
@@ -266,37 +249,37 @@ export default function StudioExportScreen() {
               </View>
               <NavArrowRight width={24} height={24} color={colors.icon} />
             </Pressable>
-            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteSign(item.timestamp)} style={{ marginLeft: 8, marginRight: 8 }} />
+            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteSign(item.local_id)} style={{ marginLeft: 8, marginRight: 8 }} />
           </View>
         ));
       case 'phrases':
         return data.phrases.map((item, index) => (
-          <View key={item.id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
+          <View key={item.local_id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
             <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'phrase')}>
               <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
               <IconBox size={44} icon={<ChatBubble width={24} height={24} color={palette.powderBlush} />} backgroundColor={palette.powderBlush + '20'} style={{ marginHorizontal: 12 }} />
               <View style={{ flex: 1 }}>
-                <Typography variant="body" style={{ fontWeight: '800' }}>{item.spanishTranslation}</Typography>
-                <Typography variant="label" color={colors.textSecondary}>{item.signs?.length || 0} señas en secuencia</Typography>
+                <Typography variant="body" style={{ fontWeight: '800' }}>{item.spanish_translation}</Typography>
+                <Typography variant="label" color={colors.textSecondary}>{item.signs_list?.length || 0} señas en secuencia</Typography>
               </View>
               <NavArrowRight width={24} height={24} color={colors.icon} />
             </Pressable>
-            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeletePhrase(item.id)} style={{ marginLeft: 8, marginRight: 8 }} />
+            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeletePhrase(item.local_id)} style={{ marginLeft: 8, marginRight: 8 }} />
           </View>
         ));
       case 'modules':
         return data.modules.map((item, index) => (
-          <View key={item.id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
+          <View key={item.local_id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
             <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'module')}>
               <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
               <IconBox size={44} icon={<BookStack width={24} height={24} color={palette.berryCrush} />} backgroundColor={palette.berryCrush + '20'} style={{ marginHorizontal: 12 }} />
               <View style={{ flex: 1 }}>
                 <Typography variant="body" style={{ fontWeight: '800' }}>{item.title}</Typography>
-                <Typography variant="label" color={colors.textSecondary}>Nivel {item.difficultyLevel} • {item.items?.length || 0} elementos</Typography>
+                <Typography variant="label" color={colors.textSecondary}>Nivel {item.difficulty_level} • {item.items_list?.length || 0} elementos</Typography>
               </View>
               <NavArrowRight width={24} height={24} color={colors.icon} />
             </Pressable>
-            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteModule(item.id)} style={{ marginLeft: 8, marginRight: 8 }} />
+            <IconButton icon={<Trash width={20} height={20} color={colors.danger} />} backgroundColor={colors.dangerBg} onPress={() => handleDeleteModule(item.local_id)} style={{ marginLeft: 8, marginRight: 8 }} />
           </View>
         ));
     }
@@ -304,6 +287,30 @@ export default function StudioExportScreen() {
 
   const renderDetailContent = () => {
     if (!selectedItem) return null;
+
+    if (selectedItemType === 'config') {
+      return (
+        <>
+          <View style={{ width: '100%', height: playerHeight, marginBottom: 24, borderRadius: 24, overflow: 'hidden', backgroundColor: '#111' }}>
+            <SignPlayer
+              animData={selectedItem.baked_quaternions}
+              width={playerWidth}
+              height={playerHeight}
+              orbitTarget={[-0.4, 0.3, 0]}
+              isConfigPreview={true}
+            />
+          </View>
+          <View style={styles.detailGroup}>
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>NOMBRE</Typography>
+            <Typography variant="body">{selectedItem.name}</Typography>
+          </View>
+          <View style={styles.detailGroup}>
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>PUNTOS CRUDOS CAPTURADOS</Typography>
+            <Typography variant="body">21 puntos articulares (HandLandmarker)</Typography>
+          </View>
+        </>
+      );
+    }
 
     if (selectedItemType === 'sign') {
       return (
@@ -325,17 +332,17 @@ export default function StudioExportScreen() {
             <View style={[styles.relationPill, { backgroundColor: palette.deepSkyBlue + '15' }]}>
               <DragHandGesture width={20} height={20} color={palette.deepSkyBlue} />
               <Typography variant="body" color={palette.deepSkyBlue} style={{ fontWeight: '700', flex: 1 }}>
-                {getConfigName(selectedItem.configHandDominantId)}
+                {getConfigName(selectedItem.dominant_config_id)}
               </Typography>
             </View>
           </View>
-          {selectedItem.configHandRecessiveId && (
+          {selectedItem.recessive_config_id && (
             <View style={styles.detailGroup}>
               <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>CONFIGURACIÓN (MANO RECESIVA)</Typography>
               <View style={[styles.relationPill, { backgroundColor: palette.deepSkyBlue + '15' }]}>
                 <DragHandGesture width={20} height={20} color={palette.deepSkyBlue} />
                 <Typography variant="body" color={palette.deepSkyBlue} style={{ fontWeight: '700', flex: 1 }}>
-                  {getConfigName(selectedItem.configHandRecessiveId)}
+                  {getConfigName(selectedItem.recessive_config_id)}
                 </Typography>
               </View>
             </View>
@@ -349,16 +356,16 @@ export default function StudioExportScreen() {
         <>
           <View style={styles.detailGroup}>
             <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>GLOSA LSV</Typography>
-            <Typography variant="body">{selectedItem.lsvGloss}</Typography>
+            <Typography variant="body">{selectedItem.lsv_gloss}</Typography>
           </View>
           <View style={styles.detailGroup}>
-            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>SECUENCIA DE SEÑAS ({selectedItem.signs?.length})</Typography>
-            {selectedItem.signs?.map((s: any, idx: number) => (
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>SECUENCIA DE SEÑAS ({selectedItem.signs_list?.length})</Typography>
+            {selectedItem.signs_list?.map((s: any, idx: number) => (
               <View key={idx} style={[styles.relationPill, { backgroundColor: colors.successBg, marginBottom: 8 }]}>
                 <Typography variant="body" color={colors.success} style={{ fontWeight: '800' }}>{idx + 1}.</Typography>
                 <VideoCamera width={20} height={20} color={colors.success} />
                 <Typography variant="body" color={colors.success} style={{ fontWeight: '700', flex: 1 }}>
-                  {getSignName(s.signId)}
+                  {getSignName(s.sign_id)}
                 </Typography>
               </View>
             ))}
@@ -375,19 +382,23 @@ export default function StudioExportScreen() {
             <Typography variant="body">{selectedItem.description || 'Sin descripción'}</Typography>
           </View>
           <View style={styles.detailGroup}>
-            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>CONTENIDO DEL MÓDULO ({selectedItem.items?.length})</Typography>
-            {selectedItem.items?.sort((a: any, b: any) => a.orderIndex - b.orderIndex).map((item: any, idx: number) => {
-              const isSign = item.itemType === 'sign';
-              const tintColor = isSign ? colors.success : palette.powderBlush;
-              const bgTint = isSign ? colors.successBg : palette.powderBlush + '15';
-              const itemName = isSign ? getSignName(item.itemId) : getPhraseName(item.itemId);
+            <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>CONTENIDO DEL MÓDULO ({selectedItem.items_list?.length})</Typography>
+            {selectedItem.items_list?.sort((a: any, b: any) => a.order_index - b.order_index).map((item: any, idx: number) => {
+              const isSign = item.item_type === 'sign';
+              const isPhrase = item.item_type === 'phrase';
+              
+              const tintColor = isSign ? colors.success : isPhrase ? palette.powderBlush : palette.deepSkyBlue;
+              const bgTint = isSign ? colors.successBg : isPhrase ? `${palette.powderBlush}15` : `${palette.deepSkyBlue}15`;
+              
+              const itemName = isSign ? getSignName(item.sign_id) : isPhrase ? getPhraseName(item.phrase_id) : getConfigName(item.config_id);
+              const typeLabel = isSign ? 'Seña' : isPhrase ? 'Frase' : 'Configuración';
 
               return (
                 <View key={idx} style={[styles.relationPill, { backgroundColor: bgTint, marginBottom: 8 }]}>
                   <Typography variant="body" color={tintColor} style={{ fontWeight: '800' }}>{idx + 1}.</Typography>
-                  {isSign ? <VideoCamera width={20} height={20} color={tintColor} /> : <ChatBubble width={20} height={20} color={tintColor} />}
+                  {isSign ? <VideoCamera width={20} height={20} color={tintColor} /> : isPhrase ? <ChatBubble width={20} height={20} color={tintColor} /> : <DragHandGesture width={20} height={20} color={tintColor} />}
                   <Typography variant="body" color={tintColor} style={{ fontWeight: '700', flex: 1 }}>
-                    {itemName} <Typography variant="label" style={{ opacity: 0.7 }}>({isSign ? 'Seña' : 'Frase'})</Typography>
+                    {itemName} <Typography variant="label" style={{ opacity: 0.7 }}>({typeLabel})</Typography>
                   </Typography>
                 </View>
               );
@@ -402,7 +413,6 @@ export default function StudioExportScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-
       <View style={styles.header}>
         <View style={styles.headerTitleContainer}>
           <Typography variant="h3">Datos</Typography>
@@ -410,7 +420,6 @@ export default function StudioExportScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
         <View style={styles.statsContainer}>
           <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <IconBox size={44} icon={<DragHandGesture width={24} height={24} color={palette.deepSkyBlue} />} backgroundColor={palette.deepSkyBlue + '15'} />
@@ -456,7 +465,6 @@ export default function StudioExportScreen() {
 
       <Modal visible={isExplorerOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsExplorerOpen(false)}>
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-
           <View style={styles.modalHeader}>
             <Typography variant="h2">Explorador Local</Typography>
             <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsExplorerOpen(false)} />
@@ -489,7 +497,6 @@ export default function StudioExportScreen() {
               </View>
             )}
           </ScrollView>
-
         </SafeAreaView>
       </Modal>
 
@@ -497,13 +504,12 @@ export default function StudioExportScreen() {
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={() => setIsDetailOpen(false)} />
           <Card style={[styles.detailCard, { backgroundColor: colors.background }]}>
-
             <View style={styles.detailHeader}>
               <View style={{ flex: 1, paddingRight: 16 }}>
                 <Typography variant="h2" numberOfLines={1}>
                   {selectedItemType === 'sign' ? selectedItem?.meanings?.[0] :
-                    selectedItemType === 'phrase' ? selectedItem?.spanishTranslation :
-                      selectedItem?.title}
+                    selectedItemType === 'phrase' ? selectedItem?.spanish_translation :
+                      selectedItem?.title || selectedItem?.name}
                 </Typography>
               </View>
               <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsDetailOpen(false)} />
@@ -514,23 +520,26 @@ export default function StudioExportScreen() {
             </ScrollView>
 
             <View style={{ marginTop: 24, gap: 12 }}>
-              <Button
-                title="Editar Elemento"
-                color={colors.surface}
-                textColor={colors.text}
-                icon={<Edit width={20} height={20} color={colors.text} strokeWidth={2.5} />}
-                onPress={handleEditItem}
-                style={{ borderWidth: 1, borderColor: colors.border }}
-              />
+              {selectedItemType !== 'config' && (
+                <Button
+                  title="Editar Elemento"
+                  color={colors.surface}
+                  textColor={colors.text}
+                  icon={<Edit width={20} height={20} color={colors.text} strokeWidth={2.5} />}
+                  onPress={handleEditItem}
+                  style={{ borderWidth: 1, borderColor: colors.border }}
+                />
+              )}
               <Button
                 title="Borrar Elemento"
                 color={colors.dangerBg}
                 textColor={colors.danger}
                 icon={<Trash width={20} height={20} color={colors.danger} strokeWidth={2.5} />}
                 onPress={() => {
-                  if (selectedItemType === 'sign') handleDeleteSign(selectedItem.timestamp);
-                  if (selectedItemType === 'phrase') handleDeletePhrase(selectedItem.id);
-                  if (selectedItemType === 'module') handleDeleteModule(selectedItem.id);
+                  if (selectedItemType === 'config') handleDeleteConfig(selectedItem.local_id);
+                  if (selectedItemType === 'sign') handleDeleteSign(selectedItem.local_id);
+                  if (selectedItemType === 'phrase') handleDeletePhrase(selectedItem.local_id);
+                  if (selectedItemType === 'module') handleDeleteModule(selectedItem.local_id);
                 }}
               />
             </View>
