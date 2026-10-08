@@ -5,11 +5,11 @@ import { Typography } from '@/components/common/Typography';
 import { db } from '@/db';
 import { signs } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useStudioStore } from '@/store/useStudioStore';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, Plus, Search, Xmark } from 'iconoir-react-native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -19,70 +19,69 @@ export default function StudioPhraseScreen() {
 
   const { phraseId } = useLocalSearchParams<{ phraseId?: string }>();
 
+  const { signs: localSignsRaw, phrases: localPhrasesRaw, setPhrases } = useStudioStore();
+
   const [spanishTranslation, setSpanishTranslation] = useState('');
   const [lsvGloss, setLsvGloss] = useState('');
   const [description, setDescription] = useState('');
   const [selectedSigns, setSelectedSigns] = useState<any[]>([]);
 
-  const [availableSigns, setAvailableSigns] = useState<any[]>([]);
+  const [dbSignsState, setDbSignsState] = useState<any[]>([]);
   const [isSignSelectorOpen, setIsSignSelectorOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const formattedLocalSigns = useMemo(() => localSignsRaw.map((item: any) => ({
+    id: item.local_id || item.timestamp,
+    meanings: item.meanings || [],
+    isLocal: true
+  })), [localSignsRaw]);
+
+  const availableSigns = useMemo(() => [...formattedLocalSigns, ...dbSignsState], [formattedLocalSigns, dbSignsState]);
+
   useFocusEffect(
     useCallback(() => {
-      const fetchData = async () => {
+      const fetchDb = async () => {
         try {
-          const dbSigns = await db.select().from(signs);
-          const formattedDbSigns = dbSigns.map(s => ({
+          const dbS = await db.select().from(signs);
+          setDbSignsState(dbS.map(s => ({
             id: s.localId,
             meanings: s.meaningsJson ? JSON.parse(s.meaningsJson) : [s.title],
             isLocal: false
-          }));
-
-          const localDataStr = await AsyncStorage.getItem('@ensenas_recorded_signs');
-          const localData = localDataStr ? JSON.parse(localDataStr) : [];
-          const formattedLocalSigns = localData.map((item: any) => ({
-            id: item.local_id || item.timestamp,
-            meanings: item.meanings || [],
-            isLocal: true
-          }));
-
-          const allSigns = [...formattedLocalSigns, ...formattedDbSigns];
-          setAvailableSigns(allSigns);
-
-          if (phraseId) {
-            const storedPhrasesStr = await AsyncStorage.getItem('@ensenas_recorded_phrases');
-            const storedPhrases = storedPhrasesStr ? JSON.parse(storedPhrasesStr) : [];
-            const phraseToEdit = storedPhrases.find((p: any) => p.id === phraseId);
-
-            if (phraseToEdit) {
-              setSpanishTranslation(phraseToEdit.spanish_translation);
-              setLsvGloss(phraseToEdit.lsv_gloss);
-              setDescription(phraseToEdit.description || '');
-
-              const loadedSigns = phraseToEdit.signs_list.map((item: any) => {
-                const foundSign = allSigns.find(s => s.id === item.sign_id);
-                return {
-                  id: item.sign_id,
-                  meanings: foundSign ? foundSign.meanings : ['Seña eliminada'],
-                  isLocal: foundSign ? foundSign.isLocal : false,
-                  listId: `loaded_sign_${item.sign_id}_${item.order_index}_${Date.now()}`
-                };
-              });
-
-              setSelectedSigns(loadedSigns);
-            }
-          } else {
-            setSpanishTranslation('');
-            setLsvGloss('');
-            setDescription('');
-            setSelectedSigns([]);
-          }
+          })));
         } catch (e) { }
       };
-      fetchData();
-    }, [phraseId])
+      fetchDb();
+    }, [])
   );
+
+  useEffect(() => {
+    if (phraseId) {
+      const phraseToEdit = localPhrasesRaw.find((p: any) => p.id === phraseId || p.local_id === phraseId);
+
+      if (phraseToEdit) {
+        setSpanishTranslation(phraseToEdit.spanish_translation);
+        setLsvGloss(phraseToEdit.lsv_gloss);
+        setDescription(phraseToEdit.description || '');
+
+        const loadedSigns = phraseToEdit.signs_list.map((item: any) => {
+          const foundSign = availableSigns.find(s => s.id === item.sign_id);
+          return {
+            id: item.sign_id,
+            meanings: foundSign ? foundSign.meanings : ['Seña eliminada'],
+            isLocal: foundSign ? foundSign.isLocal : false,
+            listId: `loaded_sign_${item.sign_id}_${item.order_index}_${Date.now()}`
+          };
+        });
+
+        setSelectedSigns(loadedSigns);
+      }
+    } else {
+      setSpanishTranslation('');
+      setLsvGloss('');
+      setDescription('');
+      setSelectedSigns([]);
+    }
+  }, [phraseId, localPhrasesRaw, availableSigns]);
 
   const handleAddSign = (sign: any) => {
     setSelectedSigns([...selectedSigns, { ...sign, listId: Date.now().toString() + Math.random().toString() }]);
@@ -98,12 +97,10 @@ export default function StudioPhraseScreen() {
     if (selectedSigns.length === 0 || !spanishTranslation.trim() || !lsvGloss.trim()) return;
 
     try {
-      const storedData = await AsyncStorage.getItem('@ensenas_recorded_phrases');
-      let currentData = storedData ? JSON.parse(storedData) : [];
-
       const targetId = phraseId || `local_phrase_${Date.now()}`;
 
       const phraseData = {
+        local_id: targetId,
         id: targetId,
         spanish_translation: spanishTranslation.trim(),
         lsv_gloss: lsvGloss.trim(),
@@ -115,13 +112,13 @@ export default function StudioPhraseScreen() {
       };
 
       if (phraseId) {
-        currentData = currentData.map((p: any) => p.id === phraseId ? phraseData : p);
-        await AsyncStorage.setItem('@ensenas_recorded_phrases', JSON.stringify(currentData));
+        const updatedPhrases = localPhrasesRaw.map((p: any) => (p.id === phraseId || p.local_id === phraseId) ? phraseData : p);
+        await setPhrases(updatedPhrases);
         Alert.alert("Frase Actualizada", "Los cambios se han guardado correctamente.", [
           { text: "OK", onPress: () => router.back() }
         ]);
       } else {
-        await AsyncStorage.setItem('@ensenas_recorded_phrases', JSON.stringify([...currentData, phraseData]));
+        await setPhrases([...localPhrasesRaw, phraseData]);
         Alert.alert("Frase Guardada", "La frase se estructuró y guardó correctamente.");
         setSpanishTranslation('');
         setLsvGloss('');

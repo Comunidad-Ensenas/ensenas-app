@@ -6,8 +6,7 @@ import { SectionHeader } from '@/components/common/SectionHeader';
 import SignPlayer from '@/components/common/SignPlayer';
 import { Typography } from '@/components/common/Typography';
 import { useTheme } from '@/hooks/useTheme';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
+import { useStudioStore } from '@/store/useStudioStore';
 import { router } from 'expo-router';
 import {
   BookStack,
@@ -19,7 +18,7 @@ import {
   VideoCamera,
   Xmark,
 } from 'iconoir-react-native';
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -46,6 +45,8 @@ export default function StudioExportScreen() {
   const { colors } = useTheme();
   const palette = (colors as any).palette;
 
+  const { configs, signs, phrases, modules, setConfigs, setSigns, setPhrases, setModules } = useStudioStore();
+
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'configs' | 'signs' | 'phrases' | 'modules'>('configs');
 
@@ -53,85 +54,52 @@ export default function StudioExportScreen() {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedItemType, setSelectedItemType] = useState<'config' | 'sign' | 'phrase' | 'module' | null>(null);
 
-  const [data, setData] = useState({
-    configs: [] as any[],
-    signs: [] as any[],
-    phrases: [] as any[],
-    modules: [] as any[]
-  });
-
-  const loadData = async () => {
-    try {
-      const [c, s, p, m] = await Promise.all([
-        AsyncStorage.getItem('@ensenas_manual_configs'),
-        AsyncStorage.getItem('@ensenas_recorded_signs'),
-        AsyncStorage.getItem('@ensenas_recorded_phrases'),
-        AsyncStorage.getItem('@ensenas_recorded_modules')
-      ]);
-
-      setData({
-        configs: c ? JSON.parse(c) : [],
-        signs: s ? JSON.parse(s) : [],
-        phrases: p ? JSON.parse(p) : [],
-        modules: m ? JSON.parse(m) : []
-      });
-    } catch (e) {}
-  };
-
-  useFocusEffect(useCallback(() => { loadData(); }, []));
-
   const getConfigName = (idToFind: string) => {
     if (!idToFind) return 'Ninguna';
-    const config = data.configs.find(c => c.local_id === idToFind);
+    const config = configs.find(c => c.local_id === idToFind);
     return config?.name || 'Configuración eliminada';
   };
 
   const getSignName = (idToFind: string) => {
     if (!idToFind) return 'Desconocida';
-    const sign = data.signs.find(s => s.local_id === idToFind);
+    const sign = signs.find(s => s.local_id === idToFind);
     return sign?.meanings?.[0] || 'Seña eliminada';
   };
 
   const getPhraseName = (idToFind: string) => {
     if (!idToFind) return 'Desconocida';
-    const phrase = data.phrases.find(p => p.local_id === idToFind);
+    const phrase = phrases.find(p => p.local_id === idToFind);
     return phrase?.spanish_translation || 'Frase eliminada';
   };
 
-  const saveAllData = async (newData: typeof data) => {
-    await Promise.all([
-      AsyncStorage.setItem('@ensenas_manual_configs', JSON.stringify(newData.configs)),
-      AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify(newData.signs)),
-      AsyncStorage.setItem('@ensenas_recorded_phrases', JSON.stringify(newData.phrases)),
-      AsyncStorage.setItem('@ensenas_recorded_modules', JSON.stringify(newData.modules))
-    ]);
-    setData(newData);
-  };
-
   const executeCascadeDelete = async (type: 'config' | 'sign' | 'phrase' | 'module', targetId: string) => {
-    let { configs, signs, phrases, modules } = data;
+    let newConfigs = [...configs];
+    let newSigns = [...signs];
+    let newPhrases = [...phrases];
+    let newModules = [...modules];
+    
     let deletedSignIds = new Set<string>();
     let deletedPhraseIds = new Set<string>();
 
     if (type === 'config') {
-      configs = configs.filter(c => c.local_id !== targetId);
-      signs.forEach(s => {
+      newConfigs = newConfigs.filter(c => c.local_id !== targetId);
+      newSigns.forEach(s => {
         if (s.dominant_config_id === targetId || s.recessive_config_id === targetId) {
           deletedSignIds.add(s.local_id);
         }
       });
-      signs = signs.filter(s => !deletedSignIds.has(s.local_id));
+      newSigns = newSigns.filter(s => !deletedSignIds.has(s.local_id));
     }
 
     if (type === 'sign') {
       deletedSignIds.add(targetId);
-      signs = signs.filter(s => !deletedSignIds.has(s.local_id));
+      newSigns = newSigns.filter(s => !deletedSignIds.has(s.local_id));
     }
 
     if (deletedSignIds.size > 0 || type === 'phrase') {
       if (type === 'phrase') deletedPhraseIds.add(targetId);
 
-      phrases = phrases.map(p => {
+      newPhrases = newPhrases.map(p => {
         const keptSigns = p.signs_list.filter((s: any) => !deletedSignIds.has(s.sign_id));
         return { ...p, signs_list: keptSigns };
       }).filter(p => {
@@ -142,22 +110,28 @@ export default function StudioExportScreen() {
     }
 
     if (deletedSignIds.size > 0 || deletedPhraseIds.size > 0 || type === 'module') {
-      modules = modules.map(m => {
+      newModules = newModules.map(m => {
         const keptItems = m.items_list.filter((item: any) => {
           if (item.item_type === 'sign') return !deletedSignIds.has(item.sign_id);
           if (item.item_type === 'phrase') return !deletedPhraseIds.has(item.phrase_id);
-          if (item.item_type === 'config') return configs.some(c => c.local_id === item.config_id);
+          if (item.item_type === 'config') return newConfigs.some(c => c.local_id === item.config_id);
           return true;
         });
         return { ...m, items_list: keptItems };
       });
 
       if (type === 'module') {
-        modules = modules.filter(m => m.local_id !== targetId);
+        newModules = newModules.filter(m => m.local_id !== targetId);
       }
     }
 
-    await saveAllData({ configs, signs, phrases, modules });
+    await Promise.all([
+      setConfigs(newConfigs),
+      setSigns(newSigns),
+      setPhrases(newPhrases),
+      setModules(newModules)
+    ]);
+    
     setIsDetailOpen(false);
   };
 
@@ -194,7 +168,12 @@ export default function StudioExportScreen() {
       { text: "Cancelar", style: "cancel" },
       {
         text: "Sí, destruir datos", style: "destructive", onPress: async () => {
-          await saveAllData({ configs: [], signs: [], phrases: [], modules: [] });
+          await Promise.all([
+            setConfigs([]),
+            setSigns([]),
+            setPhrases([]),
+            setModules([])
+          ]);
           Alert.alert("Listo", "Almacenamiento local formateado.");
         }
       }
@@ -223,7 +202,7 @@ export default function StudioExportScreen() {
   const renderExplorerList = () => {
     switch (activeTab) {
       case 'configs':
-        return data.configs.map((item, index) => (
+        return configs.map((item, index) => (
           <View key={item.local_id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
             <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'config')}>
               <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
@@ -238,7 +217,7 @@ export default function StudioExportScreen() {
           </View>
         ));
       case 'signs':
-        return data.signs.map((item, index) => (
+        return signs.map((item, index) => (
           <View key={item.local_id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
             <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'sign')}>
               <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
@@ -253,7 +232,7 @@ export default function StudioExportScreen() {
           </View>
         ));
       case 'phrases':
-        return data.phrases.map((item, index) => (
+        return phrases.map((item, index) => (
           <View key={item.local_id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
             <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'phrase')}>
               <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
@@ -268,7 +247,7 @@ export default function StudioExportScreen() {
           </View>
         ));
       case 'modules':
-        return data.modules.map((item, index) => (
+        return modules.map((item, index) => (
           <View key={item.local_id} style={[styles.listItem, { backgroundColor: colors.surface, padding: 8 }]}>
             <Pressable style={styles.listItemPressable} onPress={() => openDetails(item, 'module')}>
               <Typography variant="label" color={colors.textSecondary} style={{ width: 24, marginLeft: 8 }}>#{index + 1}</Typography>
@@ -317,7 +296,7 @@ export default function StudioExportScreen() {
         <>
           <View style={{ width: '100%', height: playerHeight, marginBottom: 24, borderRadius: 24, overflow: 'hidden', backgroundColor: '#111' }}>
             <SignPlayer
-              animationFile={selectedItem.animationFile}
+              animationFile={selectedItem.baked_animation || selectedItem.animationFile}
               width={playerWidth}
               height={playerHeight}
             />
@@ -332,17 +311,17 @@ export default function StudioExportScreen() {
             <View style={[styles.relationPill, { backgroundColor: palette.deepSkyBlue + '15' }]}>
               <DragHandGesture width={20} height={20} color={palette.deepSkyBlue} />
               <Typography variant="body" color={palette.deepSkyBlue} style={{ fontWeight: '700', flex: 1 }}>
-                {getConfigName(selectedItem.dominant_config_id)}
+                {getConfigName(selectedItem.dominant_config_id || selectedItem.configHandDominantId)}
               </Typography>
             </View>
           </View>
-          {selectedItem.recessive_config_id && (
+          {(selectedItem.recessive_config_id || selectedItem.configHandRecessiveId) && (
             <View style={styles.detailGroup}>
               <Typography variant="label" color={colors.textSecondary} style={styles.detailLabel}>CONFIGURACIÓN (MANO RECESIVA)</Typography>
               <View style={[styles.relationPill, { backgroundColor: palette.deepSkyBlue + '15' }]}>
                 <DragHandGesture width={20} height={20} color={palette.deepSkyBlue} />
                 <Typography variant="body" color={palette.deepSkyBlue} style={{ fontWeight: '700', flex: 1 }}>
-                  {getConfigName(selectedItem.recessive_config_id)}
+                  {getConfigName(selectedItem.recessive_config_id || selectedItem.configHandRecessiveId)}
                 </Typography>
               </View>
             </View>
@@ -423,25 +402,25 @@ export default function StudioExportScreen() {
         <View style={styles.statsContainer}>
           <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <IconBox size={44} icon={<DragHandGesture width={24} height={24} color={palette.deepSkyBlue} />} backgroundColor={palette.deepSkyBlue + '15'} />
-            <Typography variant="h2" style={{ marginTop: 12 }}>{data.configs.length}</Typography>
+            <Typography variant="h2" style={{ marginTop: 12 }}>{configs.length}</Typography>
             <Typography variant="label" color={colors.textSecondary} style={{ marginTop: 4 }}>Configuraciones</Typography>
           </View>
 
           <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <IconBox size={44} icon={<VideoCamera width={24} height={24} color={colors.success} />} backgroundColor={colors.successBg} />
-            <Typography variant="h2" style={{ marginTop: 12 }}>{data.signs.length}</Typography>
+            <Typography variant="h2" style={{ marginTop: 12 }}>{signs.length}</Typography>
             <Typography variant="label" color={colors.textSecondary} style={{ marginTop: 4 }}>Señas</Typography>
           </View>
 
           <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <IconBox size={44} icon={<ChatBubble width={24} height={24} color={palette.powderBlush} />} backgroundColor={palette.powderBlush + '15'} />
-            <Typography variant="h2" style={{ marginTop: 12 }}>{data.phrases.length}</Typography>
+            <Typography variant="h2" style={{ marginTop: 12 }}>{phrases.length}</Typography>
             <Typography variant="label" color={colors.textSecondary} style={{ marginTop: 4 }}>Frases</Typography>
           </View>
 
           <View style={[styles.statBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <IconBox size={44} icon={<BookStack width={24} height={24} color={palette.berryCrush} />} backgroundColor={palette.berryCrush + '15'} />
-            <Typography variant="h2" style={{ marginTop: 12 }}>{data.modules.length}</Typography>
+            <Typography variant="h2" style={{ marginTop: 12 }}>{modules.length}</Typography>
             <Typography variant="label" color={colors.textSecondary} style={{ marginTop: 4 }}>Módulos</Typography>
           </View>
         </View>

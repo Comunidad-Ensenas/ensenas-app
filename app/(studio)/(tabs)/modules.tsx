@@ -5,11 +5,11 @@ import { Typography } from '@/components/common/Typography';
 import { db } from '@/db';
 import { manualConfigurations, phrases, signs } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useStudioStore } from '@/store/useStudioStore';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChatBubble, Check, DragHandGesture, Plus, Search, VideoCamera, Xmark } from 'iconoir-react-native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,132 +18,106 @@ export default function StudioModuleScreen() {
   const palette = (colors as any).palette;
   
   const { moduleId } = useLocalSearchParams<{ moduleId?: string }>();
+  
+  const { configs: localConfigsRaw, signs: localSignsRaw, phrases: localPhrasesRaw, modules: localModulesRaw, setModules } = useStudioStore();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [difficultyLevel, setDifficultyLevel] = useState(1);
   const [moduleItems, setModuleItems] = useState<any[]>([]);
 
-  const [availableConfigs, setAvailableConfigs] = useState<any[]>([]);
-  const [availableSigns, setAvailableSigns] = useState<any[]>([]);
-  const [availablePhrases, setAvailablePhrases] = useState<any[]>([]);
+  const [dbConfigsState, setDbConfigsState] = useState<any[]>([]);
+  const [dbSignsState, setDbSignsState] = useState<any[]>([]);
+  const [dbPhrasesState, setDbPhrasesState] = useState<any[]>([]);
   
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'configs' | 'signs' | 'phrases'>('signs');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const formattedLocalConfigs = useMemo(() => localConfigsRaw.map((item: any) => ({
+    id: item.local_id || item.timestamp,
+    label: item.name || 'Configuración sin nombre',
+    type: 'config',
+    isLocal: true
+  })), [localConfigsRaw]);
+
+  const formattedLocalSigns = useMemo(() => localSignsRaw.map((item: any) => ({
+    id: item.local_id || item.timestamp,
+    label: item.meanings?.[0] || 'Seña sin nombre',
+    type: 'sign',
+    isLocal: true
+  })), [localSignsRaw]);
+
+  const formattedLocalPhrases = useMemo(() => localPhrasesRaw.map((item: any) => ({
+    id: item.id || item.local_id,
+    label: item.spanish_translation,
+    type: 'phrase',
+    isLocal: true
+  })), [localPhrasesRaw]);
+
+  const availableConfigs = useMemo(() => [...formattedLocalConfigs, ...dbConfigsState], [formattedLocalConfigs, dbConfigsState]);
+  const availableSigns = useMemo(() => [...formattedLocalSigns, ...dbSignsState], [formattedLocalSigns, dbSignsState]);
+  const availablePhrases = useMemo(() => [...formattedLocalPhrases, ...dbPhrasesState], [formattedLocalPhrases, dbPhrasesState]);
+
   useFocusEffect(
     useCallback(() => {
-      const fetchData = async () => {
+      const fetchDb = async () => {
         try {
-          const dbConfigs = await db.select().from(manualConfigurations);
-          const formattedDbConfigs = dbConfigs.map(c => ({
-            id: c.localId, 
-            label: c.name,
-            type: 'config',
-            isLocal: false
-          }));
+          const dbC = await db.select().from(manualConfigurations);
+          setDbConfigsState(dbC.map(c => ({ id: c.localId, label: c.name, type: 'config', isLocal: false })));
 
-          const localConfigsStr = await AsyncStorage.getItem('@ensenas_manual_configs');
-          const localConfigsData = localConfigsStr ? JSON.parse(localConfigsStr) : [];
-          const formattedLocalConfigs = localConfigsData.map((item: any) => ({
-            id: item.local_id || item.timestamp,
-            label: item.name || 'Configuración sin nombre',
-            type: 'config',
-            isLocal: true
-          }));
+          const dbS = await db.select().from(signs);
+          setDbSignsState(dbS.map(s => ({ id: s.localId, label: s.meaningsJson ? JSON.parse(s.meaningsJson)[0] : s.title, type: 'sign', isLocal: false })));
 
-          const allConfigs = [...formattedLocalConfigs, ...formattedDbConfigs];
-          setAvailableConfigs(allConfigs);
-
-          const dbSigns = await db.select().from(signs);
-          const formattedDbSigns = dbSigns.map(s => ({
-            id: s.localId,
-            label: s.meaningsJson ? JSON.parse(s.meaningsJson)[0] : s.title,
-            type: 'sign',
-            isLocal: false
-          }));
-
-          const localSignsStr = await AsyncStorage.getItem('@ensenas_recorded_signs');
-          const localSignsData = localSignsStr ? JSON.parse(localSignsStr) : [];
-          const formattedLocalSigns = localSignsData.map((item: any) => ({
-            id: item.local_id || item.timestamp,
-            label: item.meanings?.[0] || 'Seña sin nombre',
-            type: 'sign',
-            isLocal: true
-          }));
-
-          const allSigns = [...formattedLocalSigns, ...formattedDbSigns];
-          setAvailableSigns(allSigns);
-
-          const dbPhrases = await db.select().from(phrases);
-          const formattedDbPhrases = dbPhrases.map(p => ({
-            id: p.localId,
-            label: p.spanishTranslation,
-            type: 'phrase',
-            isLocal: false
-          }));
-
-          const localPhrasesStr = await AsyncStorage.getItem('@ensenas_recorded_phrases');
-          const localPhrasesData = localPhrasesStr ? JSON.parse(localPhrasesStr) : [];
-          const formattedLocalPhrases = localPhrasesData.map((item: any) => ({
-            id: item.id || item.local_id,
-            label: item.spanish_translation,
-            type: 'phrase',
-            isLocal: true
-          }));
-
-          const allPhrases = [...formattedLocalPhrases, ...formattedDbPhrases];
-          setAvailablePhrases(allPhrases);
-
-          if (moduleId) {
-            const storedModulesStr = await AsyncStorage.getItem('@ensenas_recorded_modules');
-            const storedModules = storedModulesStr ? JSON.parse(storedModulesStr) : [];
-            const moduleToEdit = storedModules.find((m: any) => m.id === moduleId);
-
-            if (moduleToEdit) {
-              setTitle(moduleToEdit.title);
-              setDescription(moduleToEdit.description || '');
-              setDifficultyLevel(moduleToEdit.difficulty_level || 1);
-
-              const loadedItems = moduleToEdit.items_list.map((item: any) => {
-                let label = 'Elemento eliminado o desconocido';
-                let isLocal = false;
-                
-                if (item.item_type === 'config') {
-                  const foundConfig = allConfigs.find(c => c.id === item.config_id);
-                  if (foundConfig) { label = foundConfig.label; isLocal = foundConfig.isLocal; }
-                } else if (item.item_type === 'sign') {
-                  const foundSign = allSigns.find(s => s.id === item.sign_id);
-                  if (foundSign) { label = foundSign.label; isLocal = foundSign.isLocal; }
-                } else {
-                  const foundPhrase = allPhrases.find(p => p.id === item.phrase_id);
-                  if (foundPhrase) { label = foundPhrase.label; isLocal = foundPhrase.isLocal; }
-                }
-
-                return {
-                  id: item.config_id || item.sign_id || item.phrase_id,
-                  label,
-                  type: item.item_type,
-                  isLocal,
-                  listId: `loaded_${item.item_type}_${item.order_index}_${Date.now()}`
-                };
-              });
-
-              setModuleItems(loadedItems);
-            }
-          } else {
-            setTitle('');
-            setDescription('');
-            setDifficultyLevel(1);
-            setModuleItems([]);
-          }
+          const dbP = await db.select().from(phrases);
+          setDbPhrasesState(dbP.map(p => ({ id: p.localId, label: p.spanishTranslation, type: 'phrase', isLocal: false })));
         } catch (e) {}
       };
-      
-      fetchData();
-    }, [moduleId])
+      fetchDb();
+    }, [])
   );
+
+  useEffect(() => {
+    if (moduleId) {
+      const moduleToEdit = localModulesRaw.find((m: any) => m.id === moduleId || m.local_id === moduleId);
+      if (moduleToEdit) {
+        setTitle(moduleToEdit.title);
+        setDescription(moduleToEdit.description || '');
+        setDifficultyLevel(moduleToEdit.difficulty_level || 1);
+
+        const loadedItems = moduleToEdit.items_list.map((item: any) => {
+          let label = 'Elemento eliminado o desconocido';
+          let isLocal = false;
+          
+          if (item.item_type === 'config') {
+            const foundConfig = availableConfigs.find(c => c.id === item.config_id);
+            if (foundConfig) { label = foundConfig.label; isLocal = foundConfig.isLocal; }
+          } else if (item.item_type === 'sign') {
+            const foundSign = availableSigns.find(s => s.id === item.sign_id);
+            if (foundSign) { label = foundSign.label; isLocal = foundSign.isLocal; }
+          } else {
+            const foundPhrase = availablePhrases.find(p => p.id === item.phrase_id);
+            if (foundPhrase) { label = foundPhrase.label; isLocal = foundPhrase.isLocal; }
+          }
+
+          return {
+            id: item.config_id || item.sign_id || item.phrase_id,
+            label,
+            type: item.item_type,
+            isLocal,
+            listId: `loaded_${item.item_type}_${item.order_index}_${Date.now()}`
+          };
+        });
+
+        setModuleItems(loadedItems);
+      }
+    } else {
+      setTitle('');
+      setDescription('');
+      setDifficultyLevel(1);
+      setModuleItems([]);
+    }
+  }, [moduleId, localModulesRaw, availableConfigs, availableSigns, availablePhrases]);
 
   const handleAddItem = (item: any) => {
     setModuleItems([...moduleItems, { ...item, listId: Date.now().toString() + Math.random().toString() }]);
@@ -159,12 +133,10 @@ export default function StudioModuleScreen() {
     if (!title.trim() || moduleItems.length === 0) return;
 
     try {
-      const storedData = await AsyncStorage.getItem('@ensenas_recorded_modules');
-      let currentData = storedData ? JSON.parse(storedData) : [];
-
       const targetId = moduleId || `local_module_${Date.now()}`;
       
       const moduleData = {
+        local_id: targetId,
         id: targetId,
         title: title.trim(),
         description: description.trim(),
@@ -179,13 +151,13 @@ export default function StudioModuleScreen() {
       };
 
       if (moduleId) {
-        currentData = currentData.map((m: any) => m.id === moduleId ? moduleData : m);
-        await AsyncStorage.setItem('@ensenas_recorded_modules', JSON.stringify(currentData));
+        const updatedModules = localModulesRaw.map((m: any) => (m.id === moduleId || m.local_id === moduleId) ? moduleData : m);
+        await setModules(updatedModules);
         Alert.alert("Módulo Actualizado", "Los cambios se han guardado correctamente.", [
           { text: "OK", onPress: () => router.back() }
         ]);
       } else {
-        await AsyncStorage.setItem('@ensenas_recorded_modules', JSON.stringify([...currentData, moduleData]));
+        await setModules([...localModulesRaw, moduleData]);
         Alert.alert("Módulo Guardado", "El módulo educativo se estructuró correctamente.");
         setTitle('');
         setDescription('');

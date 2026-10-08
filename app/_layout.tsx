@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { profile } from '@/db/schema';
 import migrations from '@/drizzle/migrations';
 import { useTheme } from '@/hooks/useTheme';
+import { useStudioStore } from '@/store/useStudioStore';
 import {
   Poppins_400Regular,
   Poppins_500Medium,
@@ -67,6 +68,7 @@ export default function RootLayout() {
         const appMode = process.env.EXPO_PUBLIC_APP_MODE;
 
         if (appMode === 'studio') {
+          await useStudioStore.getState().loadAllData();
           router.replace('/(studio)/(tabs)');
           return;
         }
