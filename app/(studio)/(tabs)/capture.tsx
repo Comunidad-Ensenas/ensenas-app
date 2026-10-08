@@ -6,6 +6,7 @@ import { db } from '@/db';
 import { manualConfigurations } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
 import { bakeAnimationLocal } from '@/lib/animationBaker';
+import { getCaptureHtml } from '@/lib/cameraTemplates';
 import StaticServer from '@dr.pogodin/react-native-static-server';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
@@ -17,6 +18,7 @@ import {
   Check,
   Pause,
   Plus,
+  Refresh,
   Search,
   Settings,
   Xmark,
@@ -155,6 +157,8 @@ export default function StudioCaptureScreen() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   
   const [originalAnimationFile, setOriginalAnimationFile] = useState<string | null>(null);
   const [originalRawFile, setOriginalRawFile] = useState<string | null>(null);
@@ -448,115 +452,8 @@ export default function StudioCaptureScreen() {
 
   const htmlContent = useMemo(() => {
     if (!serverUrl) return '';
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <style>
-    body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; }
-    video { position: absolute; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 1; }
-    canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 2; pointer-events: none; background-color: transparent; }
-  </style>
-</head>
-<body>
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="canvas"></canvas>
-  <script type="module">
-    import { PoseLandmarker, HandLandmarker, FilesetResolver, DrawingUtils } from "./vision_bundle.js";
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    let poseLandmarker;
-    let handLandmarker;
-    let drawingUtils;
-    let lastVideoTime = -1;
-    let lastPostTime = 0;
-
-    function roundPoint(pt) {
-      if (!pt) return pt;
-      return {
-        x: Math.round(pt.x * 10000) / 10000,
-        y: Math.round(pt.y * 10000) / 10000,
-        z: Math.round(pt.z * 10000) / 10000,
-        visibility: pt.visibility !== undefined ? pt.visibility : 1
-      };
-    }
-
-    async function init() {
-      try {
-        const vision = await FilesetResolver.forVisionTasks("./");
-        poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: "./pose.task", delegate: "GPU" },
-          runningMode: "VIDEO", minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5
-        });
-        handLandmarker = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: "./hand.task", delegate: "GPU" },
-          runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5
-        });
-        drawingUtils = new DrawingUtils(ctx);
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
-        video.srcObject = stream;
-        video.addEventListener("loadeddata", predictWebcam);
-        window.ReactNativeWebView.postMessage(JSON.stringify({ status: "READY" }));
-      } catch (err) {}
-    }
-
-    async function predictWebcam() {
-      try {
-        if (canvas.width !== video.videoWidth) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-        }
-        const startTimeMs = performance.now();
-        if (lastVideoTime !== video.currentTime) {
-          lastVideoTime = video.currentTime;
-          const poseResults = poseLandmarker.detectForVideo(video, startTimeMs);
-          const handResults = handLandmarker.detectForVideo(video, startTimeMs);
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          if (poseResults && poseResults.landmarks && poseResults.landmarks.length > 0) {
-            drawingUtils.drawConnectors(poseResults.landmarks[0], PoseLandmarker.POSE_CONNECTIONS, { color: "rgba(255,255,255,0.3)", lineWidth: 2 });
-          }
-          if (handResults && handResults.landmarks && handResults.landmarks.length > 0) {
-            for (const landmarks of handResults.landmarks) {
-              drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "#38BDF8", lineWidth: 2 });
-            }
-          }
-
-          if (startTimeMs - lastPostTime > 66) {
-            const frameData = { timestamp: Date.now(), pose3D: null, pose2D: null, leftHand: null, rightHand: null };
-
-            if (poseResults && poseResults.worldLandmarks && poseResults.worldLandmarks.length > 0 && poseResults.landmarks.length > 0) {
-              frameData.pose3D = poseResults.worldLandmarks[0].map(roundPoint);
-              frameData.pose2D = poseResults.landmarks[0].map(roundPoint);
-            }
-
-            if (handResults && handResults.landmarks && handResults.landmarks.length > 0) {
-              handResults.landmarks.forEach((hand, index) => {
-                const classification = handResults.handednesses[index][0].category;
-                if (classification === "Left") {
-                  frameData.leftHand = hand.map(roundPoint);
-                } else {
-                  frameData.rightHand = hand.map(roundPoint);
-                }
-              });
-            }
-
-            if (frameData.pose3D || frameData.leftHand || frameData.rightHand) {
-              window.ReactNativeWebView.postMessage(JSON.stringify(frameData));
-            }
-            lastPostTime = startTimeMs;
-          }
-        }
-        window.requestAnimationFrame(predictWebcam);
-      } catch (err) {}
-    }
-    init();
-  </script>
-</body>
-</html>`;
-  }, [serverUrl]);
+    return getCaptureHtml(facingMode);
+  }, [serverUrl, facingMode]);
 
   const renderCameraView = () => (
     <View style={[styles.cameraContainer, { borderColor: isRecording ? '#EF4444' : colors.border, borderWidth: isRecording ? 4 : 1 }]}>
@@ -631,7 +528,19 @@ export default function StudioCaptureScreen() {
         </View>
       </Pressable>
 
-      {!isRecording && <View style={styles.spacer} />}
+      {!isRecording && countdown === null && (
+        <Pressable 
+          style={[styles.settingsButton, { backgroundColor: colors.surface, borderColor: colors.border }]} 
+          onPress={() => {
+            setIsReady(false);
+            setFacingMode((prev) => prev === 'user' ? 'environment' : 'user');
+          }}
+        >
+          <Refresh width={24} height={24} color={colors.text} />
+        </Pressable>
+      )}
+
+      {!isRecording && countdown !== null && <View style={styles.spacer} />}
     </View>
   );
 

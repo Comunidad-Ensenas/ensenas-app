@@ -4,10 +4,11 @@ import { IconButton } from '@/components/common/IconButton';
 import { Typography } from '@/components/common/Typography';
 import { useTheme } from '@/hooks/useTheme';
 import { bakeAnimationLocal } from '@/lib/animationBaker';
+import { getConfigHtml } from '@/lib/cameraTemplates';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
-import { Camera, Check, DragHandGesture, Plus, Settings, Xmark } from 'iconoir-react-native';
-import React, { useEffect, useState } from 'react';
+import { Camera, Check, DragHandGesture, Plus, Refresh, Settings, Xmark } from 'iconoir-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraPermission } from 'react-native-vision-camera';
@@ -20,11 +21,12 @@ export default function StudioConfigScreen() {
   const isFocused = useIsFocused();
 
   const [landmarksData, setLandmarksData] = useState<any[]>([]);
-  
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [manualConfigName, setManualConfigName] = useState('');
   const [currentTip, setCurrentTip] = useState('');
   const [learningTips, setLearningTips] = useState<string[]>([]);
+  
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
 
   const isFormValid = manualConfigName.trim().length > 0;
   const isDetected = landmarksData.length > 0;
@@ -87,93 +89,9 @@ export default function StudioConfigScreen() {
     }
   };
 
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-      <style>
-        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        video { position: absolute; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 1; }
-        canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 2; pointer-events: none; background-color: transparent; }
-        #status { z-index: 100; position: absolute; top: 20px; text-align: center; width: 100%; background: rgba(0,0,0,0.7); padding: 10px 0; color: white; font-family: sans-serif; border-radius: 20px; font-size: 14px;}
-      </style>
-    </head>
-    <body>
-      <div id="status">Encendiendo cámara...</div>
-      <video id="video" autoplay playsinline muted></video>
-      <canvas id="canvas"></canvas>
-      <script type="module">
-        import { HandLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
-        const video = document.getElementById("video");
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
-        const statusEl = document.getElementById("status");
-        let handLandmarker;
-        let drawingUtils;
-        let lastVideoTime = -1;
-        let lastPostTime = 0;
-        let hadHandsLastFrame = false;
-
-        async function init() {
-          try {
-            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
-            handLandmarker = await HandLandmarker.createFromOptions(vision, {
-              baseOptions: {
-                modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
-                delegate: "GPU"
-              },
-              runningMode: "VIDEO",
-              numHands: 1,
-              minHandDetectionConfidence: 0.6,
-              minHandPresenceConfidence: 0.6,
-              minTrackingConfidence: 0.6
-            });
-            drawingUtils = new DrawingUtils(ctx);
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
-            video.srcObject = stream;
-            video.addEventListener("loadeddata", predictWebcam);
-            statusEl.style.display = "none";
-          } catch (err) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ error: err.message }));
-          }
-        }
-
-        async function predictWebcam() {
-          if (canvas.width !== video.videoWidth) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-          }
-          let startTimeMs = performance.now();
-          if (lastVideoTime !== video.currentTime) {
-            lastVideoTime = video.currentTime;
-            const results = handLandmarker.detectForVideo(video, startTimeMs);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (results.landmarks && results.landmarks.length > 0) {
-              if (startTimeMs - lastPostTime > 150) {
-                window.ReactNativeWebView.postMessage(JSON.stringify(results.landmarks));
-                lastPostTime = startTimeMs;
-              }
-              hadHandsLastFrame = true;
-              for (const landmarks of results.landmarks) {
-                drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "rgba(255,255,255,0.7)", lineWidth: 4 });
-                drawingUtils.drawLandmarks(landmarks, { color: "#38BDF8", lineWidth: 2, radius: 5 });
-              }
-            } else {
-              if (hadHandsLastFrame) {
-                 window.ReactNativeWebView.postMessage(JSON.stringify([]));
-                 hadHandsLastFrame = false;
-              }
-            }
-          }
-          window.requestAnimationFrame(predictWebcam);
-        }
-        init();
-      </script>
-    </body>
-    </html>
-  `;
+  const htmlContent = useMemo(() => {
+    return getConfigHtml(facingMode);
+  }, [facingMode]);
 
   if (!hasPermission) {
     return (
@@ -245,10 +163,17 @@ export default function StudioConfigScreen() {
           </View>
         </Pressable>
 
-        <View style={styles.spacer} />
+        <Pressable 
+          style={[styles.settingsButton, { backgroundColor: colors.surface, borderColor: colors.border }]} 
+          onPress={() => {
+            setLandmarksData([]);
+            setFacingMode((prev) => prev === 'user' ? 'environment' : 'user');
+          }}
+        >
+          <Refresh width={24} height={24} color={colors.text} />
+        </Pressable>
       </View>
 
-      {/* Modal para rellenar los datos ANTES de guardar */}
       <Modal animationType="fade" transparent={true} visible={isSettingsOpen} onRequestClose={() => setIsSettingsOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={() => setIsSettingsOpen(false)} />
@@ -321,57 +246,13 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 12 },
   headerTitleContainer: { flex: 1, alignItems: 'center' },
   cameraWrapper: { flex: 1, paddingHorizontal: 16, paddingBottom: 4 },
-  cameraContainer: {
-    flex: 1,
-    borderRadius: 32,
-    overflow: 'hidden',
-    backgroundColor: '#111',
-    borderWidth: 1,
-    position: 'relative'
-  },
+  cameraContainer: { flex: 1, borderRadius: 32, overflow: 'hidden', backgroundColor: '#111', borderWidth: 1, position: 'relative' },
   webview: { flex: 1, backgroundColor: 'transparent' },
-  statusOverlay: {
-    position: 'absolute',
-    top: 20,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    gap: 10,
-  },
-  controlsWrapper: {
-    flexDirection: 'row',
-    paddingVertical: 20,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 100,
-    paddingHorizontal: 40,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  settingsButton: { 
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    borderWidth: 1, 
-    alignItems: 'center', 
-    justifyContent: 'center' 
-  },
-  shutterButton: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    borderWidth: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shutterInner: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  statusOverlay: { position: 'absolute', top: 20, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 24, gap: 10 },
+  controlsWrapper: { flexDirection: 'row', paddingVertical: 20, paddingBottom: Platform.OS === 'ios' ? 20 : 100, paddingHorizontal: 40, alignItems: 'center', justifyContent: 'space-between' },
+  settingsButton: { width: 56, height: 56, borderRadius: 28, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  shutterButton: { width: 84, height: 84, borderRadius: 42, borderWidth: 4, alignItems: 'center', justifyContent: 'center' },
+  shutterInner: { width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center' },
   spacer: { width: 56 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end', alignItems: 'center' },
   modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
@@ -379,14 +260,7 @@ const styles = StyleSheet.create({
   dialogHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingBottom: 16 },
   dialogBody: { paddingHorizontal: 24, paddingBottom: 24 },
   inputRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  input: {
-    fontSize: 16,
-    borderRadius: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    fontWeight: '600',
-    borderWidth: 2
-  },
+  input: { fontSize: 16, borderRadius: 20, paddingVertical: 16, paddingHorizontal: 20, fontWeight: '600', borderWidth: 2 },
   addBtn: { width: 56, justifyContent: 'center', alignItems: 'center', borderRadius: 20, borderWidth: 2 },
   chipsWrapContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingLeft: 14, paddingRight: 8, borderRadius: 20, gap: 8 },
