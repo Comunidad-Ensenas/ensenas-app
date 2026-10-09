@@ -6,11 +6,14 @@ import { SectionHeader } from '@/components/common/SectionHeader';
 import SignPlayer from '@/components/common/SignPlayer';
 import { Typography } from '@/components/common/Typography';
 import { useTheme } from '@/hooks/useTheme';
+import { supabase } from '@/lib/supabase';
 import { useStudioStore } from '@/store/useStudioStore';
+import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import {
   BookStack,
   ChatBubble,
+  CloudUpload,
   DragHandGesture,
   Edit,
   NavArrowRight,
@@ -20,12 +23,16 @@ import {
 } from 'iconoir-react-native';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +40,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { width: screenWidth } = Dimensions.get('window');
 const playerWidth = screenWidth - 88;
 const playerHeight = playerWidth * 1.33;
+const ANIMATIONS_DIRECTORY = `${FileSystem.documentDirectory}ensenas/animations/`;
 
 const TAB_TITLES = {
   configs: 'Configuraciones',
@@ -53,6 +61,13 @@ export default function StudioExportScreen() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedItemType, setSelectedItemType] = useState<'config' | 'sign' | 'phrase' | 'module' | null>(null);
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  const [isExporting, setIsExporting] = useState(false);
 
   const getConfigName = (idToFind: string) => {
     if (!idToFind) return 'Ninguna';
@@ -196,6 +211,216 @@ export default function StudioExportScreen() {
       router.push({ pathname: '/phrases', params: { phraseId: selectedItem.local_id } } as any);
     } else if (selectedItemType === 'sign') {
       router.push({ pathname: '/capture', params: { signId: selectedItem.local_id } } as any);
+    }
+  };
+
+  const proceedExport = async () => {
+    try {
+      if (configs.length > 0) {
+        const rawConfigsPayload = configs.map(c => ({
+          local_id: c.local_id,
+          name: c.name,
+          raw_landmarks: c.raw_landmarks,
+          learning_tips: c.learning_tips || []
+        }));
+        
+        const appConfigsPayload = configs.map(c => ({
+          id: c.local_id,
+          name: c.name,
+          vector_data: JSON.stringify(c.raw_landmarks),
+          raw_source_id: c.local_id,
+          learning_tips: c.learning_tips || []
+        }));
+
+        const { error: rawConfError } = await supabase.from('raw_manual_configs').upsert(rawConfigsPayload);
+        if (rawConfError) throw rawConfError;
+        
+        const { error: appConfError } = await supabase.from('app_manual_configs').upsert(appConfigsPayload);
+        if (appConfError) throw appConfError;
+      }
+
+      if (signs.length > 0) {
+        const rawSignsPayload = [];
+        const appSignsPayload = [];
+
+        for (const s of signs) {
+          let rawFramesJson = {};
+          
+          try {
+            if (s.raw_frames) {
+              const fileContent = await FileSystem.readAsStringAsync(`${ANIMATIONS_DIRECTORY}${s.raw_frames}`);
+              rawFramesJson = JSON.parse(fileContent);
+            }
+          } catch (e) {}
+
+          if (s.baked_animation) {
+            try {
+              const animContent = await FileSystem.readAsStringAsync(`${ANIMATIONS_DIRECTORY}${s.baked_animation}`);
+              const { error: uploadError } = await supabase.storage
+                .from('animations')
+                .upload(s.baked_animation, animContent, {
+                  contentType: 'application/json',
+                  upsert: true
+                });
+              if (uploadError) console.error("Aviso: Fallo al subir animación", uploadError);
+            } catch (e) {}
+          }
+
+          rawSignsPayload.push({
+            local_id: s.local_id,
+            dominant_config_id: s.dominant_config_id,
+            recessive_config_id: s.recessive_config_id,
+            meanings: s.meanings,
+            learning_tips: s.learning_tips || [],
+            raw_frames: rawFramesJson
+          });
+
+          appSignsPayload.push({
+            id: s.local_id,
+            meanings: s.meanings,
+            dominant_config_id: s.dominant_config_id,
+            recessive_config_id: s.recessive_config_id,
+            animation_filename: s.baked_animation || 'missing_animation.json',
+            raw_source_id: s.local_id,
+            learning_tips: s.learning_tips || []
+          });
+        }
+
+        const { error: rawSignsError } = await supabase.from('raw_signs').upsert(rawSignsPayload);
+        if (rawSignsError) throw rawSignsError;
+        
+        const { error: appSignsError } = await supabase.from('app_signs').upsert(appSignsPayload);
+        if (appSignsError) throw appSignsError;
+      }
+
+      if (phrases.length > 0) {
+        const phrasesPayload = phrases.map(p => ({
+          id: p.local_id,
+          spanish_translation: p.spanish_translation,
+          lsv_gloss: p.lsv_gloss,
+          description: p.description || null
+        }));
+        const { error: pError } = await supabase.from('phrases').upsert(phrasesPayload);
+        if (pError) throw pError;
+
+        const phraseSignsPayload = phrases.flatMap(p => p.signs_list.map((s: any) => ({
+          phrase_id: p.local_id,
+          sign_id: s.sign_id,
+          order_index: s.order_index
+        })));
+        if (phraseSignsPayload.length > 0) {
+          const { error: psError } = await supabase.from('phrase_signs').upsert(phraseSignsPayload);
+          if (psError) throw psError;
+        }
+      }
+
+      if (modules.length > 0) {
+        const modulesPayload = modules.map(m => ({
+          id: m.local_id,
+          title: m.title,
+          description: m.description || null,
+          difficulty_level: m.difficulty_level
+        }));
+        const { error: mError } = await supabase.from('modules').upsert(modulesPayload);
+        if (mError) throw mError;
+
+        const moduleItemsPayload = modules.flatMap(m => m.items_list.map((item: any) => ({
+          module_id: m.local_id,
+          item_type: item.item_type,
+          config_id: item.config_id || null,
+          sign_id: item.sign_id || null,
+          phrase_id: item.phrase_id || null,
+          order_index: item.order_index
+        })));
+        if (moduleItemsPayload.length > 0) {
+          const { error: miError } = await supabase.from('module_items').upsert(moduleItemsPayload);
+          if (miError) throw miError;
+        }
+      }
+
+      Alert.alert("¡Exportación Exitosa!", "Tus datos procesados han sido subidos a producción y los archivos crudos respaldados.");
+    } catch (error: any) {
+      Alert.alert("Error en Exportación", error.message || "Ocurrió un problema al subir los datos.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const checkAuthAndExport = async () => {
+    if (configs.length === 0 && signs.length === 0 && phrases.length === 0 && modules.length === 0) {
+      Alert.alert("Nada que exportar", "No hay datos locales guardados en el Studio.");
+      return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      setIsAuthModalOpen(true);
+    } else {
+      handleExportToCloud(); 
+    }
+  };
+
+  const handleLogin = async () => {
+    setIsAuthenticating(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setIsAuthenticating(false);
+
+    if (error) {
+      Alert.alert("Error", "Credenciales incorrectas.");
+    } else {
+      setIsAuthModalOpen(false);
+      handleExportToCloud();
+    }
+  };
+
+  const handleExportToCloud = async () => {
+    if (configs.length === 0 && signs.length === 0 && phrases.length === 0 && modules.length === 0) {
+      Alert.alert("Nada que exportar", "No hay datos locales guardados en el Studio.");
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const { data: remoteSigns, error } = await supabase.from('raw_signs').select('meanings');
+      if (error) throw error;
+
+      const remoteMeanings = new Set<string>();
+      remoteSigns?.forEach(rs => {
+        if (Array.isArray(rs.meanings)) {
+          rs.meanings.forEach((m: string) => remoteMeanings.add(m.toLowerCase().trim()));
+        }
+      });
+
+      const conflictingSigns = signs.filter(s => {
+        const firstMeaning = s.meanings?.[0]?.toLowerCase().trim();
+        return firstMeaning && remoteMeanings.has(firstMeaning);
+      });
+
+      if (conflictingSigns.length > 0) {
+        setIsExporting(false);
+        Alert.alert(
+          "Posibles Duplicados en la Nube",
+          `Se encontraron ${conflictingSigns.length} señas locales (ej. '${conflictingSigns[0].meanings[0]}') que ya existen en la base de datos principal.\n\n¿Deseas subirlas de todas formas como nuevas variantes, o cancelar para revisarlas?`,
+          [
+            { text: "Cancelar y Revisar", style: "cancel" },
+            { 
+              text: "Subir como Variantes", 
+              style: "default", 
+              onPress: () => {
+                setIsExporting(true);
+                proceedExport();
+              }
+            }
+          ]
+        );
+      } else {
+        proceedExport();
+      }
+    } catch (e) {
+      setIsExporting(false);
+      Alert.alert("Error de Conexión", "No se pudo comprobar la información con Supabase.");
     }
   };
 
@@ -428,7 +653,14 @@ export default function StudioExportScreen() {
         <SectionHeader title="Acciones" />
         <View style={styles.actionsContainer}>
           <Button
-            title="EXPLORAR DATOS LOCALES"
+            title="Exportar a la Nube"
+            color={palette.deepSkyBlue}
+            textColor="#FFFFFF"
+            icon={<CloudUpload width={20} height={20} color="#FFFFFF" strokeWidth={2.5} />}
+            onPress={checkAuthAndExport}
+          />
+          <Button
+            title="Explorar datos locales"
             variant="secondary"
             onPress={() => setIsExplorerOpen(true)}
           />
@@ -441,6 +673,60 @@ export default function StudioExportScreen() {
           />
         </View>
       </ScrollView>
+
+      <Modal visible={isAuthModalOpen} transparent={true} animationType="fade" onRequestClose={() => setIsAuthModalOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+          <View style={[styles.detailCard, { backgroundColor: colors.background }]}>
+            <Typography variant="h2" style={{ marginBottom: 8 }}>Acceso de Docente</Typography>
+            <Typography variant="body" color={colors.textSecondary} style={{ marginBottom: 24 }}>
+              Inicia sesión para autorizar la sincronización con la base de datos principal.
+            </Typography>
+
+            <TextInput
+              style={[styles.input, { color: colors.text, backgroundColor: colors.input, borderColor: colors.border, marginBottom: 16 }]}
+              placeholder="Correo electrónico"
+              placeholderTextColor={colors.textSecondary}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <TextInput
+              style={[styles.input, { color: colors.text, backgroundColor: colors.input, borderColor: colors.border, marginBottom: 24 }]}
+              placeholder="Contraseña"
+              placeholderTextColor={colors.textSecondary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+
+            <View style={{ gap: 12 }}>
+              <Button
+                title={isAuthenticating ? "Verificando..." : "Iniciar Sesión y Exportar"}
+                color={palette.deepSkyBlue}
+                textColor="#FFFFFF"
+                onPress={handleLogin}
+                disabled={isAuthenticating || !email || !password}
+              />
+              <Button
+                title="Cancelar"
+                color={colors.surface}
+                textColor={colors.text}
+                onPress={() => setIsAuthModalOpen(false)}
+                disabled={isAuthenticating}
+              />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {isExporting && (
+        <View style={styles.exportingOverlay}>
+          <ActivityIndicator size="large" color={palette.deepSkyBlue} />
+          <Typography variant="h3" color="#FFF" style={{ marginTop: 16 }}>Sincronizando con la nube...</Typography>
+          <Typography variant="body" color="#FFF" style={{ marginTop: 8, textAlign: 'center' }}>Por favor, no cierres la aplicación.</Typography>
+        </View>
+      )}
 
       <Modal visible={isExplorerOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsExplorerOpen(false)}>
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -551,5 +837,14 @@ const styles = StyleSheet.create({
   detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   detailGroup: { marginBottom: 20 },
   detailLabel: { marginBottom: 8, letterSpacing: 0.5 },
+  input: { fontSize: 16, borderRadius: 20, paddingVertical: 16, paddingHorizontal: 20, fontWeight: '600', borderWidth: 2 },
   relationPill: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 16, gap: 12 },
+  exportingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
 });
+
+/**
+ * TODO:
+ * - Exportar tambien los datos procesados ya directamente, no solamente los raw
+ * - Preguntar si es necesario un numero que identifique a cada configuracion manual (nombre, tips, numero de configuracion manual)
+ * - Refinar la matematica de los dedos para que funcione mejor
+ */

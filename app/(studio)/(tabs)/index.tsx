@@ -6,8 +6,9 @@ import { useCameraServer } from '@/context/CameraServerContext';
 import { useTheme } from '@/hooks/useTheme';
 import { bakeAnimationLocal } from '@/lib/animationBaker';
 import { getConfigHtml } from '@/lib/cameraTemplates';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useStudioStore } from '@/store/useStudioStore';
 import { useIsFocused } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { Camera, Check, DragHandGesture, Plus, Refresh, Settings, Xmark } from 'iconoir-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -22,6 +23,7 @@ export default function StudioConfigScreen() {
   const isFocused = useIsFocused();
   
   const { serverUrl } = useCameraServer();
+  const { configs, setConfigs } = useStudioStore();
 
   const [landmarksData, setLandmarksData] = useState<any[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -78,15 +80,14 @@ export default function StudioConfigScreen() {
     };
 
     try {
-      const storedData = await AsyncStorage.getItem('@ensenas_manual_configs');
-      const currentData = storedData ? JSON.parse(storedData) : [];
-      await AsyncStorage.setItem('@ensenas_manual_configs', JSON.stringify([...currentData, newConfig]));
+      await setConfigs([...configs, newConfig]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       setManualConfigName('');
       setCurrentTip('');
       setLearningTips([]);
     } catch (e) {
-      console.error("Error guardando config", e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
 
@@ -147,7 +148,10 @@ export default function StudioConfigScreen() {
       <View style={styles.controlsWrapper}>
         <Pressable 
           style={[styles.settingsButton, { backgroundColor: isFormValid ? colors.surface : palette.powderBlush, borderColor: colors.border }]} 
-          onPress={() => setIsSettingsOpen(true)}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setIsSettingsOpen(true);
+          }}
         >
           <Settings width={24} height={24} color={isFormValid ? colors.text : '#000'} />
         </Pressable>
@@ -168,6 +172,7 @@ export default function StudioConfigScreen() {
         <Pressable 
           style={[styles.settingsButton, { backgroundColor: colors.surface, borderColor: colors.border }]} 
           onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             setLandmarksData([]);
             setFacingMode((prev) => prev === 'user' ? 'environment' : 'user');
           }}

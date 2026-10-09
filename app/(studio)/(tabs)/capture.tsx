@@ -8,9 +8,10 @@ import { manualConfigurations } from '@/db/schema';
 import { useTheme } from '@/hooks/useTheme';
 import { bakeAnimationLocal } from '@/lib/animationBaker';
 import { getCaptureHtml } from '@/lib/cameraTemplates';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useStudioStore } from '@/store/useStudioStore';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Camera, Check, Pause, Plus, Refresh, Search, Settings, Xmark } from 'iconoir-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -72,13 +73,15 @@ export default function StudioCaptureScreen() {
   const { signId } = useLocalSearchParams<{ signId?: string }>();
   
   const { serverUrl } = useCameraServer();
+  const { configs: localConfigsRaw, signs: localSignsRaw, setSigns } = useStudioStore();
+
+  const [dbConfigsState, setDbConfigsState] = useState<any[]>([]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConfigSelectorOpen, setIsConfigSelectorOpen] = useState(false);
   const [selectingHand, setSelectingHand] = useState<'dominant' | 'recessive' | null>(null);
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [availableConfigs, setAvailableConfigs] = useState<any[]>([]);
   const [selectedDominantConfig, setSelectedDominantConfig] = useState<any | null>(null);
   const [selectedRecessiveConfig, setSelectedRecessiveConfig] = useState<any | null>(null);
   
@@ -100,6 +103,17 @@ export default function StudioCaptureScreen() {
 
   const isFormValid = meaningsList.length > 0 && selectedDominantConfig !== null;
 
+  const formattedLocalConfigs = useMemo(() => localConfigsRaw.map((item: any, index: number) => ({
+    id: item.local_id || `local_config_${item.timestamp || index}`,
+    name: item.name,
+    code: null,
+    imagePath: null,
+    vectorData: JSON.stringify(item.raw_landmarks || item.landmarks),
+    isLocal: true,
+  })), [localConfigsRaw]);
+
+  const availableConfigs = useMemo(() => [...formattedLocalConfigs, ...dbConfigsState], [formattedLocalConfigs, dbConfigsState]);
+
   useEffect(() => {
     if (!hasPermission) requestPermission();
   }, [hasPermission, requestPermission]);
@@ -112,64 +126,52 @@ export default function StudioCaptureScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      const fetchData = async () => {
+      const fetchDb = async () => {
         try {
-          const [dbConfigs, localDataStr] = await Promise.all([
-            db.select().from(manualConfigurations),
-            AsyncStorage.getItem('@ensenas_manual_configs'),
-          ]);
-
-          const localData = localDataStr ? JSON.parse(localDataStr) : [];
-          const formattedLocalConfigs = localData.map((item: any, index: number) => ({
-            id: item.local_id || `local_config_${item.timestamp || index}`,
-            name: item.name,
+          const dbConfigs = await db.select().from(manualConfigurations);
+          setDbConfigsState(dbConfigs.map(c => ({
+            id: c.localId,
+            name: c.name,
             code: null,
             imagePath: null,
-            vectorData: JSON.stringify(item.raw_landmarks || item.landmarks),
-            isLocal: true,
-          }));
-
-          const combinedConfigs = [...formattedLocalConfigs, ...dbConfigs];
-          if (cancelled) return;
-          setAvailableConfigs(combinedConfigs);
-
-          if (signId) {
-            const storedSignsStr = await AsyncStorage.getItem('@ensenas_recorded_signs');
-            const storedSigns = storedSignsStr ? JSON.parse(storedSignsStr) : [];
-            const signToEdit = storedSigns.find((s: any) => s.local_id === signId || s.timestamp === signId);
-
-            if (signToEdit) {
-              setMeaningsList(signToEdit.meanings || []);
-              setLearningTips(signToEdit.learning_tips || []);
-              setOriginalAnimationFile(getStoredAnimationFile(signToEdit));
-              setOriginalRawFile(signToEdit.raw_frames || null);
-
-              const domConfigId = signToEdit.dominant_config_id || signToEdit.configHandDominantId || `local_${signToEdit.configHandDominantId}`;
-              const domConfig = combinedConfigs.find((c) => c.id === domConfigId);
-              if (domConfig) setSelectedDominantConfig(domConfig);
-
-              const recConfigId = signToEdit.recessive_config_id || signToEdit.configHandRecessiveId || `local_${signToEdit.configHandRecessiveId}`;
-              if (recConfigId) {
-                const recConfig = combinedConfigs.find((c) => c.id === recConfigId);
-                if (recConfig) setSelectedRecessiveConfig(recConfig);
-              }
-            }
-          } else {
-            setMeaningsList([]);
-            setLearningTips([]);
-            setSelectedDominantConfig(null);
-            setSelectedRecessiveConfig(null);
-            setOriginalAnimationFile(null);
-            setOriginalRawFile(null);
-          }
+            vectorData: JSON.stringify(c.rawLandmarks),
+            isLocal: false,
+          })));
         } catch (error) {}
       };
-
-      fetchData();
-      return () => { cancelled = true; };
-    }, [signId])
+      fetchDb();
+    }, [])
   );
+
+  useEffect(() => {
+    if (signId) {
+      const signToEdit = localSignsRaw.find((s: any) => s.local_id === signId || s.timestamp === signId);
+
+      if (signToEdit) {
+        setMeaningsList(signToEdit.meanings || []);
+        setLearningTips(signToEdit.learning_tips || []);
+        setOriginalAnimationFile(getStoredAnimationFile(signToEdit));
+        setOriginalRawFile(signToEdit.raw_frames || null);
+
+        const domConfigId = signToEdit.dominant_config_id || signToEdit.configHandDominantId || `local_${signToEdit.configHandDominantId}`;
+        const domConfig = availableConfigs.find((c) => c.id === domConfigId);
+        if (domConfig) setSelectedDominantConfig(domConfig);
+
+        const recConfigId = signToEdit.recessive_config_id || signToEdit.configHandRecessiveId || `local_${signToEdit.configHandRecessiveId}`;
+        if (recConfigId) {
+          const recConfig = availableConfigs.find((c) => c.id === recConfigId);
+          if (recConfig) setSelectedRecessiveConfig(recConfig);
+        }
+      }
+    } else {
+      setMeaningsList([]);
+      setLearningTips([]);
+      setSelectedDominantConfig(null);
+      setSelectedRecessiveConfig(null);
+      setOriginalAnimationFile(null);
+      setOriginalRawFile(null);
+    }
+  }, [signId, localSignsRaw, availableConfigs]);
 
   const onMessage = useCallback((event: any) => {
     try {
@@ -218,8 +220,6 @@ export default function StudioCaptureScreen() {
   const saveEditedMetadataOnly = async () => {
     if (!selectedDominantConfig || meaningsList.length === 0) return;
     try {
-      const storedData = await AsyncStorage.getItem('@ensenas_recorded_signs');
-      let currentData = storedData ? JSON.parse(storedData) : [];
       const updatedSign = {
         local_id: signId,
         dominant_config_id: selectedDominantConfig.id,
@@ -230,8 +230,9 @@ export default function StudioCaptureScreen() {
         raw_frames: originalRawFile
       };
 
-      currentData = currentData.map((s: any) => (s.local_id === signId || s.timestamp === signId) ? { ...s, ...updatedSign } : s);
-      await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify(currentData));
+      const currentData = localSignsRaw.map((s: any) => (s.local_id === signId || s.timestamp === signId) ? { ...s, ...updatedSign } : s);
+      await setSigns(currentData);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (error) {}
   };
@@ -248,6 +249,7 @@ export default function StudioCaptureScreen() {
         setCountdown(null);
         return;
       }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       setCountdown(3);
       countdownTimerRef.current = setInterval(() => {
         setCountdown((prev) => {
@@ -256,8 +258,10 @@ export default function StudioCaptureScreen() {
             countdownTimerRef.current = null;
             framesBuffer.current = [];
             setIsRecording(true);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             return null;
           }
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           return prev ? prev - 1 : null;
         });
       }, 1000);
@@ -265,6 +269,7 @@ export default function StudioCaptureScreen() {
     }
 
     setIsRecording(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
     const capturedFrames = framesBuffer.current.length;
     if (capturedFrames <= 5) return;
 
@@ -272,9 +277,11 @@ export default function StudioCaptureScreen() {
       const framesToSave = framesBuffer.current;
       const currentSignId = signId || `local_sign_${Date.now()}`;
 
-      const rawFileName = await saveRawLocally(`raw_${currentSignId}.json`, framesToSave);
+      const numericId = currentSignId.replace('local_sign_', '');
+      
+      const rawFileName = await saveRawLocally(`raw_${numericId}.json`, framesToSave);
       const animationData = bakeAnimationLocal(framesToSave, selectedRecessiveConfig === null);
-      const animationFile = `sena_${currentSignId}.json`;
+      const animationFile = `sign_${numericId}.json`;
       const savedFileName = await saveAnimationLocally(animationFile, animationData);
 
       const newSign = {
@@ -287,17 +294,17 @@ export default function StudioCaptureScreen() {
         raw_frames: rawFileName
       };
 
-      const storedData = await AsyncStorage.getItem('@ensenas_recorded_signs');
-      let currentData = storedData ? JSON.parse(storedData) : [];
-
       if (signId) {
-        currentData = currentData.map((s: any) => (s.local_id === signId || s.timestamp === signId) ? { ...s, ...newSign } : s);
-        await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify(currentData));
+        const currentData = localSignsRaw.map((s: any) => (s.local_id === signId || s.timestamp === signId) ? { ...s, ...newSign } : s);
+        await setSigns(currentData);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.back();
         return;
       }
 
-      await AsyncStorage.setItem('@ensenas_recorded_signs', JSON.stringify([...currentData, newSign]));
+      await setSigns([...localSignsRaw, newSign]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
       setMeaningsList([]);
       setCurrentMeaning('');
       setLearningTips([]);
@@ -308,6 +315,7 @@ export default function StudioCaptureScreen() {
       setOriginalRawFile(null);
       framesBuffer.current = [];
     } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'No se pudo generar la animación localmente.');
     }
   };
@@ -382,7 +390,10 @@ export default function StudioCaptureScreen() {
       {!isRecording && countdown === null && (
         <Pressable 
           style={[styles.settingsButton, { backgroundColor: isFormValid ? colors.surface : palette.powderBlush, borderColor: colors.border }]} 
-          onPress={() => setIsSettingsOpen(true)}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setIsSettingsOpen(true);
+          }}
         >
           <Settings width={24} height={24} color={isFormValid ? colors.text : '#000'} />
         </Pressable>
@@ -410,6 +421,7 @@ export default function StudioCaptureScreen() {
         <Pressable 
           style={[styles.settingsButton, { backgroundColor: colors.surface, borderColor: colors.border }]} 
           onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             setIsReady(false);
             setFacingMode((prev) => prev === 'user' ? 'environment' : 'user');
           }}

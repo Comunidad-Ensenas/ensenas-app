@@ -1,4 +1,4 @@
 allowBuilds:
-  '@shopify/react-native-skia': set this to true or false
-  esbuild: set this to true or false
+  '@shopify/react-native-skia': false
+  esbuild: true
 nodeLinker: hoisted
