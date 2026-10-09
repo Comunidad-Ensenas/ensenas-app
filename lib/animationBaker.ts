@@ -81,7 +81,7 @@ function computeFingerJointAngle(p0: Landmark, p1: Landmark, p2: Landmark): numb
 function smoothAndResampleTrack(
   boneRotations: BoneRotations,
   duration: number,
-  targetFPS: number = 60
+  targetFPS: number = 30 
 ): BoneRotations {
   const smoothedRotations: BoneRotations = {};
   const totalFrames = Math.ceil(duration * targetFPS);
@@ -124,7 +124,7 @@ function smoothAndResampleTrack(
 
     for (let i = 0; i <= totalFrames; i++) {
       const t = i * step;
-      newTimes.push(t);
+      newTimes.push(Number(t.toFixed(3)));
 
       const qMid = getQuatAt(t);
       const qPrev = getQuatAt(t - window);
@@ -133,7 +133,12 @@ function smoothAndResampleTrack(
       const qAverage = qPrev.slerp(qNext, 0.5);
       qMid.slerp(qAverage, smoothFactor);
 
-      newVals.push(qMid.x, qMid.y, qMid.z, qMid.w);
+      newVals.push(
+        Number(qMid.x.toFixed(4)),
+        Number(qMid.y.toFixed(4)),
+        Number(qMid.z.toFixed(4)),
+        Number(qMid.w.toFixed(4))
+      );
     }
     smoothedRotations[boneName] = { times: newTimes, values: newVals };
   }
@@ -328,7 +333,7 @@ export function bakeAnimationLocal(
     }
   });
 
-  const smoothedBoneRotations = smoothAndResampleTrack(boneRotations, duration, 60);
+  const smoothedBoneRotations = smoothAndResampleTrack(boneRotations, duration, 30);
 
   const tracks = Object.keys(smoothedBoneRotations).map((boneName) => ({
     name: `${boneName}.quaternion`,
@@ -336,5 +341,5 @@ export function bakeAnimationLocal(
     values: smoothedBoneRotations[boneName].values,
   }));
 
-  return { duration, tracks };
+  return { duration: Number(duration.toFixed(3)), tracks };
 }
