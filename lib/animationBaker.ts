@@ -280,7 +280,6 @@ export function bakeAnimationLocal(
         palmNormal.negate();
       }
 
-      // ✨ CORRECCIÓN DE PROFUNDIDAD Y MAGNETISMO EN 2D
       const handSize2D = Math.hypot(p9.x - p0.x, p9.y - p0.y);
       const pinchThreshold2D = handSize2D * 0.75; 
 
@@ -295,7 +294,7 @@ export function bakeAnimationLocal(
           
           const midX = (tTip.x + fTip.x) / 2;
           const midY = (tTip.y + fTip.y) / 2;
-          const midZ = (tTip.z + fTip.z) / 2; // Forzamos misma profundidad Z
+          const midZ = (tTip.z + fTip.z) / 2;
 
           landmarks[4] = { x: tTip.x + (midX - tTip.x) * pull, y: tTip.y + (midY - tTip.y) * pull, z: tTip.z + (midZ - tTip.z) * pull };
           landmarks[tipIdx] = { x: fTip.x + (midX - fTip.x) * pull, y: fTip.y + (midY - fTip.y) * pull, z: fTip.z + (midZ - fTip.z) * pull };
@@ -329,7 +328,6 @@ export function bakeAnimationLocal(
 
       const globalPalmNorm = getCustomNormal(9, 5, 17);
       
-      // ✨ OPOSICIÓN DEL PULGAR: Torcemos el eje para que cruce la palma
       const thumbSideVec = prefix === 'right' ? vSide.clone() : vSide.clone().negate();
       const thumbNormal = new THREE.Vector3().lerpVectors(globalPalmNorm, thumbSideVec, 0.6).normalize();
 
