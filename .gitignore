@@ -45,6 +45,7 @@ yarn-error.*
 .env.production
 
 graphify-out/
+AGENTS.md
 .idea/
 .vscode/
 

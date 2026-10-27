@@ -41,7 +41,12 @@ const bases = {
 };
 
 function getVector(p1: Landmark, p2: Landmark): THREE.Vector3 {
-  return new THREE.Vector3(p2.x - p1.x, p2.y - p1.y, -(p2.z - p1.z)).normalize();
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const dz = -(p2.z - p1.z);
+  const lenSq = dx * dx + dy * dy + dz * dz;
+  if (lenSq < 1e-6) return new THREE.Vector3(0, 1, 0); 
+  return new THREE.Vector3(dx, dy, dz).normalize();
 }
 
 function mirrorPoint(pt: Landmark | null | undefined): Landmark | null | undefined {
@@ -71,17 +76,10 @@ function computeJointRotation(
   return q2.multiply(q1);
 }
 
-function computeFingerJointAngle(p0: Landmark, p1: Landmark, p2: Landmark): number {
-  const v1 = new THREE.Vector3(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z).normalize();
-  const v2 = new THREE.Vector3(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z).normalize();
-  const dot = Math.min(Math.max(v1.dot(v2), -1.0), 1.0);
-  return Math.acos(dot);
-}
-
 function smoothAndResampleTrack(
   boneRotations: BoneRotations,
   duration: number,
-  targetFPS: number = 30 
+  targetFPS: number = 30
 ): BoneRotations {
   const smoothedRotations: BoneRotations = {};
   const totalFrames = Math.ceil(duration * targetFPS);
@@ -145,11 +143,6 @@ function smoothAndResampleTrack(
   return smoothedRotations;
 }
 
-/**
- * Main function
- * 
- * Bakes the animation data from the provided frames.
- */
 export function bakeAnimationLocal(
   frames: FrameData[],
   ignoreRecessive: boolean
@@ -265,35 +258,6 @@ export function bakeAnimationLocal(
     }
 
     const processHand = (landmarks: Landmark[], prefix: 'left' | 'right', qAbsLower: THREE.Quaternion) => {
-      const sign = prefix === 'right' ? -1 : 1;
-
-      const solveFinger = (name: string, idxs: number[]) => {
-        const a1 = computeFingerJointAngle(landmarks[0], landmarks[idxs[0]], landmarks[idxs[1]]);
-        const a2 = computeFingerJointAngle(landmarks[idxs[0]], landmarks[idxs[1]], landmarks[idxs[2]]);
-        const a3 = computeFingerJointAngle(landmarks[idxs[1]], landmarks[idxs[2]], landmarks[idxs[3]]);
-
-        const q1 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), sign * a1);
-        const q2 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), sign * a2);
-        const q3 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), sign * a3);
-
-        saveRawQuat(`${prefix}${name}Proximal`, q1, time);
-        saveRawQuat(`${prefix}${name}Intermediate`, q2, time);
-        saveRawQuat(`${prefix}${name}Distal`, q3, time);
-      };
-
-      solveFinger('Index', [5, 6, 7, 8]);
-      solveFinger('Middle', [9, 10, 11, 12]);
-      solveFinger('Ring', [13, 14, 15, 16]);
-      solveFinger('Little', [17, 18, 19, 20]);
-
-      const tAngle1 = computeFingerJointAngle(landmarks[0], landmarks[1], landmarks[2]);
-      const tAngle2 = computeFingerJointAngle(landmarks[1], landmarks[2], landmarks[3]);
-      const tAngle3 = computeFingerJointAngle(landmarks[2], landmarks[3], landmarks[4]);
-
-      saveRawQuat(`${prefix}ThumbProximal`, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), sign * tAngle1), time);
-      saveRawQuat(`${prefix}ThumbIntermediate`, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), sign * tAngle2), time);
-      saveRawQuat(`${prefix}ThumbDistal`, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), sign * tAngle3), time);
-
       const p0 = landmarks[0];
       const p5 = landmarks[5];
       const p9 = landmarks[9];
@@ -305,21 +269,92 @@ export function bakeAnimationLocal(
       const baseDir = bases[`${prefix}Dir`];
       const baseNorm = bases[`${prefix}Norm`];
 
-      let normal = new THREE.Vector3().crossVectors(vDir, vSide);
-      if (normal.lengthSq() < 0.01) {
-        normal = baseNorm.clone().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(baseDir, vDir));
+      let palmNormal = new THREE.Vector3().crossVectors(vDir, vSide);
+      if (palmNormal.lengthSq() < 0.01) {
+        palmNormal = baseNorm.clone().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(baseDir, vDir));
       } else {
-        normal.normalize();
+        palmNormal.normalize();
       }
 
       if (prefix === 'left') {
-        normal.negate();
+        palmNormal.negate();
       }
 
-      const qWristWorld = computeJointRotation(vDir, normal, baseDir, baseNorm);
-      const qWristLocal = qAbsLower.clone().invert().multiply(qWristWorld);
+      // ✨ CORRECCIÓN DE PROFUNDIDAD Y MAGNETISMO EN 2D
+      const handSize2D = Math.hypot(p9.x - p0.x, p9.y - p0.y);
+      const pinchThreshold2D = handSize2D * 0.75; 
 
+      [8, 12, 16, 20].forEach(tipIdx => {
+        const tTip = landmarks[4];
+        const fTip = landmarks[tipIdx];
+        
+        const dist2D = Math.hypot(fTip.x - tTip.x, fTip.y - tTip.y);
+
+        if (dist2D < pinchThreshold2D) {
+          const pull = Math.min(1.0, Math.max(0, (pinchThreshold2D - dist2D) / pinchThreshold2D + 0.35));
+          
+          const midX = (tTip.x + fTip.x) / 2;
+          const midY = (tTip.y + fTip.y) / 2;
+          const midZ = (tTip.z + fTip.z) / 2; // Forzamos misma profundidad Z
+
+          landmarks[4] = { x: tTip.x + (midX - tTip.x) * pull, y: tTip.y + (midY - tTip.y) * pull, z: tTip.z + (midZ - tTip.z) * pull };
+          landmarks[tipIdx] = { x: fTip.x + (midX - fTip.x) * pull, y: fTip.y + (midY - fTip.y) * pull, z: fTip.z + (midZ - fTip.z) * pull };
+
+          const tInter = landmarks[3];
+          const fInter = landmarks[tipIdx - 1];
+          const interMidZ = (tInter.z + fInter.z) / 2;
+          const pullInter = pull * 0.5;
+          
+          landmarks[3] = { ...tInter, z: tInter.z + (interMidZ - tInter.z) * pullInter };
+          landmarks[tipIdx - 1] = { ...fInter, z: fInter.z + (interMidZ - fInter.z) * pullInter };
+        }
+      });
+
+      const qWristWorld = computeJointRotation(vDir, palmNormal, baseDir, baseNorm);
+      const qWristLocal = qAbsLower.clone().invert().multiply(qWristWorld);
       saveRawQuat(`${prefix}Wrist`, qWristLocal, time);
+
+      const getCustomNormal = (dirIdx: number, sideIdx1: number, sideIdx2: number) => {
+        const dDir = getVector(landmarks[0], landmarks[dirIdx]);
+        const dSide = getVector(landmarks[sideIdx1], landmarks[sideIdx2]);
+        let normal = new THREE.Vector3().crossVectors(dDir, dSide);
+        if (normal.lengthSq() < 0.01) {
+          normal = baseNorm.clone().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(baseDir, dDir));
+        } else {
+          normal.normalize();
+        }
+        if (prefix === 'left') normal.negate();
+        return normal;
+      };
+
+      const globalPalmNorm = getCustomNormal(9, 5, 17);
+      
+      // ✨ OPOSICIÓN DEL PULGAR: Torcemos el eje para que cruce la palma
+      const thumbSideVec = prefix === 'right' ? vSide.clone() : vSide.clone().negate();
+      const thumbNormal = new THREE.Vector3().lerpVectors(globalPalmNorm, thumbSideVec, 0.6).normalize();
+
+      const solve3DFinger = (name: string, idxs: number[], customNorm: THREE.Vector3) => {
+        const vProx = getVector(landmarks[idxs[0]], landmarks[idxs[1]]);
+        const qProxWorld = computeJointRotation(vProx, customNorm, baseDir, baseNorm);
+        const qProxLocal = qWristWorld.clone().invert().multiply(qProxWorld);
+        saveRawQuat(`${prefix}${name}Proximal`, qProxLocal, time);
+
+        const vInter = getVector(landmarks[idxs[1]], landmarks[idxs[2]]);
+        const qInterWorld = computeJointRotation(vInter, customNorm, baseDir, baseNorm);
+        const qInterLocal = qProxWorld.clone().invert().multiply(qInterWorld);
+        saveRawQuat(`${prefix}${name}Intermediate`, qInterLocal, time);
+
+        const vDist = getVector(landmarks[idxs[2]], landmarks[idxs[3]]);
+        const qDistWorld = computeJointRotation(vDist, customNorm, baseDir, baseNorm);
+        const qDistLocal = qInterWorld.clone().invert().multiply(qDistWorld);
+        saveRawQuat(`${prefix}${name}Distal`, qDistLocal, time);
+      };
+
+      solve3DFinger('Thumb', [1, 2, 3, 4], thumbNormal);
+      solve3DFinger('Index', [5, 6, 7, 8], getCustomNormal(5, 5, 9));
+      solve3DFinger('Middle', [9, 10, 11, 12], globalPalmNorm);
+      solve3DFinger('Ring', [13, 14, 15, 16], getCustomNormal(13, 9, 17));
+      solve3DFinger('Little', [17, 18, 19, 20], getCustomNormal(17, 13, 17));
     };
 
     const avLeftHand = mirrorArray(frame.rightHand);

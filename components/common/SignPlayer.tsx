@@ -123,7 +123,7 @@ export default function SignPlayer({
     <View style={[styles.container, { width, height }]}>
       {loadingAnimation && (
         <View style={styles.loading}>
-          <ActivityIndicator size="small" />
+          <ActivityIndicator size="small" color="#00BFFF" />
         </View>
       )}
 
@@ -140,7 +140,15 @@ export default function SignPlayer({
             alpha: true,
           }}
         >
-          <OrbitControls enablePan={false} minDistance={1} maxDistance={6} target={orbitTarget} />
+          <OrbitControls 
+            enablePan={false} 
+            minDistance={1} 
+            maxDistance={6} 
+            target={orbitTarget} 
+            enableDamping={true}
+            dampingFactor={0.05}
+            zoomSpeed={0.4} 
+          />
           <AvatarModel 
             animData={animData} 
             position={[0, -2.5, 0]} 

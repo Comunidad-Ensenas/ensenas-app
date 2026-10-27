@@ -68,6 +68,9 @@ export default function StudioExportScreen() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const [isExporting, setIsExporting] = useState(false);
+  
+  // 🔥 NUEVO: Controla si la cámara 3D está siendo tocada
+  const [isCanvasActive, setIsCanvasActive] = useState(false);
 
   const getConfigName = (idToFind: string) => {
     if (!idToFind) return 'Ninguna';
@@ -245,6 +248,7 @@ export default function StudioExportScreen() {
 
         for (const s of signs) {
           let rawFramesJson = {};
+          let bakedAnimationJson = {};
           
           try {
             if (s.raw_frames) {
@@ -253,18 +257,12 @@ export default function StudioExportScreen() {
             }
           } catch (e) {}
 
-          if (s.baked_animation) {
-            try {
-              const animContent = await FileSystem.readAsStringAsync(`${ANIMATIONS_DIRECTORY}${s.baked_animation}`);
-              const { error: uploadError } = await supabase.storage
-                .from('animations')
-                .upload(s.baked_animation, animContent, {
-                  contentType: 'application/json',
-                  upsert: true
-                });
-              if (uploadError) console.error("Aviso: Fallo al subir animación", uploadError);
-            } catch (e) {}
-          }
+          try {
+            if (s.baked_animation) {
+              const fileContent = await FileSystem.readAsStringAsync(`${ANIMATIONS_DIRECTORY}${s.baked_animation}`);
+              bakedAnimationJson = JSON.parse(fileContent);
+            }
+          } catch (e) {}
 
           rawSignsPayload.push({
             local_id: s.local_id,
@@ -280,7 +278,7 @@ export default function StudioExportScreen() {
             meanings: s.meanings,
             dominant_config_id: s.dominant_config_id,
             recessive_config_id: s.recessive_config_id,
-            animation_filename: s.baked_animation || 'missing_animation.json',
+            animation_data: bakedAnimationJson, 
             raw_source_id: s.local_id,
             learning_tips: s.learning_tips || []
           });
@@ -495,7 +493,13 @@ export default function StudioExportScreen() {
     if (selectedItemType === 'config') {
       return (
         <>
-          <View style={{ width: '100%', height: playerHeight, marginBottom: 24, borderRadius: 24, overflow: 'hidden', backgroundColor: '#111' }}>
+          {/* 🔥 ENVOLTURA PARA BLOQUEAR EL SCROLL */}
+          <View 
+            style={{ width: '100%', height: playerHeight, marginBottom: 24, borderRadius: 24, overflow: 'hidden', backgroundColor: '#111' }}
+            onTouchStart={() => setIsCanvasActive(true)}
+            onTouchEnd={() => setIsCanvasActive(false)}
+            onTouchCancel={() => setIsCanvasActive(false)}
+          >
             <SignPlayer
               animData={selectedItem.baked_quaternions}
               width={playerWidth}
@@ -519,7 +523,13 @@ export default function StudioExportScreen() {
     if (selectedItemType === 'sign') {
       return (
         <>
-          <View style={{ width: '100%', height: playerHeight, marginBottom: 24, borderRadius: 24, overflow: 'hidden', backgroundColor: '#111' }}>
+          {/* 🔥 ENVOLTURA PARA BLOQUEAR EL SCROLL */}
+          <View 
+            style={{ width: '100%', height: playerHeight, marginBottom: 24, borderRadius: 24, overflow: 'hidden', backgroundColor: '#111' }}
+            onTouchStart={() => setIsCanvasActive(true)}
+            onTouchEnd={() => setIsCanvasActive(false)}
+            onTouchCancel={() => setIsCanvasActive(false)}
+          >
             <SignPlayer
               animationFile={selectedItem.baked_animation || selectedItem.animationFile}
               width={playerWidth}
@@ -780,7 +790,12 @@ export default function StudioExportScreen() {
               <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsDetailOpen(false)} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+            {/* 🔥 EL SCROLL SE APAGA DINÁMICAMENTE */}
+            <ScrollView 
+              showsVerticalScrollIndicator={false} 
+              style={{ maxHeight: 400 }}
+              scrollEnabled={!isCanvasActive}
+            >
               {renderDetailContent()}
             </ScrollView>
 
@@ -842,9 +857,8 @@ const styles = StyleSheet.create({
   exportingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
 });
 
-/**
+/* 
  * TODO:
- * - Exportar tambien los datos procesados ya directamente, no solamente los raw
- * - Preguntar si es necesario un numero que identifique a cada configuracion manual (nombre, tips, numero de configuracion manual)
- * - Refinar la matematica de los dedos para que funcione mejor
+ * - [ ] Arreglar zoom, rotate y scroll de SingPlayer.tsx
+ * - [ ] Arreglar toque de dedos en eje Z de animationBaker
  */
