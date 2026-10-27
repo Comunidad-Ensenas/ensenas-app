@@ -493,19 +493,17 @@ export default function StudioExportScreen() {
     if (selectedItemType === 'config') {
       return (
         <>
-          {/* 🔥 ENVOLTURA PARA BLOQUEAR EL SCROLL */}
+          {/* Disable parent scroll while the 3D viewer owns the gesture. */}
           <View 
             style={{ width: '100%', height: playerHeight, marginBottom: 24, borderRadius: 24, overflow: 'hidden', backgroundColor: '#111' }}
-            onTouchStart={() => setIsCanvasActive(true)}
-            onTouchEnd={() => setIsCanvasActive(false)}
-            onTouchCancel={() => setIsCanvasActive(false)}
           >
             <SignPlayer
               animData={selectedItem.baked_quaternions}
               width={playerWidth}
               height={playerHeight}
-              orbitTarget={[-0.4, 0.3, 0]}
+              orbitTarget={[0, 0.3, 0]}
               isConfigPreview={true}
+              onInteractionChange={setIsCanvasActive}
             />
           </View>
           <View style={styles.detailGroup}>
@@ -523,17 +521,15 @@ export default function StudioExportScreen() {
     if (selectedItemType === 'sign') {
       return (
         <>
-          {/* 🔥 ENVOLTURA PARA BLOQUEAR EL SCROLL */}
+          {/* Disable parent scroll while the 3D viewer owns the gesture. */}
           <View 
             style={{ width: '100%', height: playerHeight, marginBottom: 24, borderRadius: 24, overflow: 'hidden', backgroundColor: '#111' }}
-            onTouchStart={() => setIsCanvasActive(true)}
-            onTouchEnd={() => setIsCanvasActive(false)}
-            onTouchCancel={() => setIsCanvasActive(false)}
           >
             <SignPlayer
               animationFile={selectedItem.baked_animation || selectedItem.animationFile}
               width={playerWidth}
               height={playerHeight}
+              onInteractionChange={setIsCanvasActive}
             />
           </View>
 
@@ -790,7 +786,7 @@ export default function StudioExportScreen() {
               <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsDetailOpen(false)} />
             </View>
 
-            {/* 🔥 EL SCROLL SE APAGA DINÁMICAMENTE */}
+            {/* Disable parent scroll while the 3D viewer owns the gesture. */}
             <ScrollView 
               showsVerticalScrollIndicator={false} 
               style={{ maxHeight: 400 }}
