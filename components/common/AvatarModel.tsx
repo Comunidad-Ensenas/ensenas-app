@@ -105,8 +105,10 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
     let loadedTexture: THREE.Texture | null = null;
 
     async function loadAvatar() {
+      const vrmModelName = "crimsom";
+
       try {
-        const vrmAsset = Asset.fromModule(require('../../assets/models/avatar_debug.vrm'));
+        const vrmAsset = Asset.fromModule(require(`../../assets/3d/${vrmModelName}/avatar_debug.vrm`));
         await vrmAsset.downloadAsync();
         if (!vrmAsset.localUri) throw new Error('');
 
@@ -126,7 +128,7 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
 
         loadedVrm.scene.rotation.y = Math.PI;
 
-        loadedTexture = await loadNativeTexture(require('../../assets/models/avatar_texture.png'));
+        loadedTexture = await loadNativeTexture(require(`../../assets/3d/${vrmModelName}/avatar_texture.png`));
         if (cancelled) {
           loadedTexture.dispose();
           return;
