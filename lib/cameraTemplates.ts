@@ -72,7 +72,8 @@ export const getConfigHtml = (facingMode: 'user' | 'environment') => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (results.landmarks && results.landmarks.length > 0) {
               if (startTimeMs - lastPostTime > 150) {
-                window.ReactNativeWebView.postMessage(JSON.stringify(results.landmarks));
+                const output = results.worldLandmarks && results.worldLandmarks.length === results.landmarks.length ? results.worldLandmarks : results.landmarks;
+                window.ReactNativeWebView.postMessage(JSON.stringify(output));
                 lastPostTime = startTimeMs;
               }
               hadHandsLastFrame = true;
@@ -193,10 +194,11 @@ export const getCaptureHtml = (facingMode: 'user' | 'environment') => {
                 if (handResults && handResults.landmarks && handResults.landmarks.length > 0) {
                   handResults.landmarks.forEach((hand, index) => {
                     const classification = handResults.handednesses[index][0].category;
+                    const world = (handResults.worldLandmarks && handResults.worldLandmarks[index]) || hand;
                     if (classification === "Left") {
-                      frameData.leftHand = hand.map(roundPoint);
+                      frameData.leftHand = world.map(roundPoint);
                     } else {
-                      frameData.rightHand = hand.map(roundPoint);
+                      frameData.rightHand = world.map(roundPoint);
                     }
                   });
                 }

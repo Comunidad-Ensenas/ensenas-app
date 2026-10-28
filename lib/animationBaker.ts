@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { captureHandShape, medianHandShape, type HandShape } from '@/lib/handRetarget';
+
 export interface Landmark {
   x: number;
   y: number;
@@ -24,6 +26,10 @@ export interface AnimationTrack {
 export interface AnimationData {
   duration: number;
   tracks: AnimationTrack[];
+  handShape?: {
+    left?: HandShape;
+    right?: HandShape;
+  };
 }
 
 interface BoneRotations {
@@ -168,6 +174,7 @@ export function bakeAnimationLocal(
   const rightArmRest = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -1.25);
   const leftArmRest = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 1.25);
   const identityQuat = new THREE.Quaternion(0, 0, 0, 1);
+  const handShapeSamples: { left: HandShape[]; right: HandShape[] } = { left: [], right: [] };
 
   frames.forEach((frame, i) => {
     const time = i / fps;
@@ -313,6 +320,8 @@ export function bakeAnimationLocal(
       const qWristLocal = qAbsLower.clone().invert().multiply(qWristWorld);
       saveRawQuat(`${prefix}Wrist`, qWristLocal, time);
 
+      handShapeSamples[prefix].push(captureHandShape(landmarks));
+
       const getCustomNormal = (dirIdx: number, sideIdx1: number, sideIdx2: number) => {
         const dDir = getVector(landmarks[0], landmarks[dirIdx]);
         const dSide = getVector(landmarks[sideIdx1], landmarks[sideIdx2]);
@@ -374,5 +383,14 @@ export function bakeAnimationLocal(
     values: smoothedBoneRotations[boneName].values,
   }));
 
-  return { duration: Number(duration.toFixed(3)), tracks };
+  const handShape = {
+    left: handShapeSamples.left.length ? medianHandShape(handShapeSamples.left) : undefined,
+    right: handShapeSamples.right.length ? medianHandShape(handShapeSamples.right) : undefined,
+  };
+
+  return {
+    duration: Number(duration.toFixed(3)),
+    tracks,
+    ...(handShape.left || handShape.right ? { handShape } : {}),
+  };
 }

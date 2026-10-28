@@ -852,9 +852,3 @@ const styles = StyleSheet.create({
   relationPill: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 16, gap: 12 },
   exportingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
 });
-
-/* 
- * TODO:
- * - [ ] Arreglar zoom, rotate y scroll de SingPlayer.tsx
- * - [ ] Arreglar toque de dedos en eje Z de animationBaker
- */

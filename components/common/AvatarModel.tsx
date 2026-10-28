@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber/native';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-native';
 
 import { VRMLoaderPlugin } from '@pixiv/three-vrm';
@@ -9,6 +9,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 import type { AnimationData } from './SignPlayer';
+
+import { applyHandShape, prepareFingerRotations, resetHandShape, solveFingerRotations } from '@/lib/handRetarget';
 
 type AvatarModelProps = {
   animData?: AnimationData | null;
@@ -100,13 +102,24 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
   const leftLowerArmFlexQuat = useRef(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -2.0));
   const leftHandFixQuat = useRef(new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.5, 0, -1.0)));
 
+  const trackedBones = useMemo(() => {
+    const set = new Set<string>();
+    for (const track of animData?.tracks ?? []) {
+      const sourceBone = track.name.replace('.quaternion', '');
+      set.add(BONE_TO_VRM[sourceBone] || sourceBone);
+    }
+    return set;
+  }, [animData]);
+
   useEffect(() => {
     let cancelled = false;
     let loadedTexture: THREE.Texture | null = null;
 
     async function loadAvatar() {
+      const vrmModelName = 'bizdude';
+
       try {
-        const vrmAsset = Asset.fromModule(require('../../assets/models/avatar_debug.vrm'));
+        const vrmAsset = Asset.fromModule(require(`../../assets/3d/${vrmModelName}/avatar_debug.vrm`));
         await vrmAsset.downloadAsync();
         if (!vrmAsset.localUri) throw new Error('');
 
@@ -124,9 +137,11 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
         const loadedVrm = gltf.userData.vrm;
         if (!loadedVrm) throw new Error('');
 
+        prepareFingerRotations(loadedVrm.humanoid);
+
         loadedVrm.scene.rotation.y = Math.PI;
 
-        loadedTexture = await loadNativeTexture(require('../../assets/models/avatar_texture.png'));
+        loadedTexture = await loadNativeTexture(require(`../../assets/3d/${vrmModelName}/avatar_texture.png`));
         if (cancelled) {
           loadedTexture.dispose();
           return;
@@ -244,6 +259,18 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
     } catch (error) {}
   }, [vrm, animData]);
 
+  useEffect(() => {
+    if (!vrm || !vrm.humanoid) return;
+
+    resetHandShape(vrm.humanoid);
+
+    const shape = animData?.handShape;
+    if (!shape) return;
+
+    if (shape.left) applyHandShape(vrm.humanoid, 'left', shape.left);
+    if (shape.right) applyHandShape(vrm.humanoid, 'right', shape.right);
+  }, [vrm, animData]);
+
   useFrame((_, delta) => {
     if (!vrm) return;
     
@@ -263,6 +290,12 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
       if (lHand) {
         lHand.quaternion.copy(leftHandFixQuat.current);
       }
+    }
+
+    if (vrm.humanoid) {
+      const hasTrack = (name: string) => trackedBones.has(name);
+      solveFingerRotations(vrm.humanoid, 'left', hasTrack);
+      solveFingerRotations(vrm.humanoid, 'right', hasTrack);
     }
 
     vrm.update(delta);

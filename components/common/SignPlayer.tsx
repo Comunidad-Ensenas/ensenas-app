@@ -5,6 +5,8 @@ import { ActivityIndicator, PanResponder, StyleSheet, View } from 'react-native'
 
 import AvatarModel from './AvatarModel';
 
+import type { HandShape } from '@/lib/handRetarget';
+
 const MIN_CAMERA_DISTANCE = 3.5;
 const MAX_CAMERA_DISTANCE = 7;
 const ORBIT_SENSITIVITY = 0.008;
@@ -80,6 +82,10 @@ type AnimationTrack = {
 export type AnimationData = {
   duration: number;
   tracks: AnimationTrack[];
+  handShape?: {
+    left?: HandShape;
+    right?: HandShape;
+  };
 };
 
 type SignPlayerProps = {
