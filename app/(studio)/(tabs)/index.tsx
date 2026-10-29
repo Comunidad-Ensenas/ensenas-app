@@ -1,7 +1,8 @@
 import { Button } from '@/components/common/Button';
-import { Card } from '@/components/common/Card';
-import { IconButton } from '@/components/common/IconButton';
 import { Typography } from '@/components/common/Typography';
+import { FormField } from '@/components/studio/FormField';
+import { SheetModal } from '@/components/studio/SheetModal';
+import { TagField } from '@/components/studio/TagField';
 import { useCameraServer } from '@/context/CameraServerContext';
 import { useTheme } from '@/hooks/useTheme';
 import { bakeAnimationLocal } from '@/lib/animationBaker';
@@ -9,9 +10,9 @@ import { getConfigHtml } from '@/lib/cameraTemplates';
 import { useStudioStore } from '@/store/useStudioStore';
 import { useIsFocused } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { Camera, Check, DragHandGesture, Plus, Refresh, Settings, Xmark } from 'iconoir-react-native';
+import { Camera, Check, DragHandGesture, Refresh, Settings } from 'iconoir-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraPermission } from 'react-native-vision-camera';
 import { WebView } from 'react-native-webview';
@@ -28,7 +29,6 @@ export default function StudioConfigScreen() {
   const [landmarksData, setLandmarksData] = useState<any[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [manualConfigName, setManualConfigName] = useState('');
-  const [currentTip, setCurrentTip] = useState('');
   const [learningTips, setLearningTips] = useState<string[]>([]);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
 
@@ -46,18 +46,6 @@ export default function StudioConfigScreen() {
       if (data.error) return;
       setLandmarksData(data);
     } catch (e) { }
-  };
-
-  const handleAddTip = () => {
-    const trimmedTip = currentTip.trim();
-    if (trimmedTip && !learningTips.includes(trimmedTip)) {
-      setLearningTips([...learningTips, trimmedTip]);
-      setCurrentTip('');
-    }
-  };
-
-  const handleRemoveTip = (tipToRemove: string) => {
-    setLearningTips(learningTips.filter((tip) => tip !== tipToRemove));
   };
 
   const handleSaveConfig = async () => {
@@ -84,7 +72,6 @@ export default function StudioConfigScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       setManualConfigName('');
-      setCurrentTip('');
       setLearningTips([]);
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -108,7 +95,7 @@ export default function StudioConfigScreen() {
   if (!isFormValid) {
     overlayText = "Configura los datos primero";
   } else if (!isDetected) {
-    overlayText = "Enfoca tu mano...";
+    overlayText = "Enfoca tu mano";
   } else {
     overlayText = "Mano lista para capturar";
   }
@@ -152,6 +139,8 @@ export default function StudioConfigScreen() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setIsSettingsOpen(true);
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Editar detalles de la configuración"
         >
           <Settings width={24} height={24} color={isFormValid ? colors.text : '#000'} />
         </Pressable>
@@ -163,6 +152,8 @@ export default function StudioConfigScreen() {
           }]}
           onPress={handleSaveConfig}
           disabled={!isReadyToCapture}
+          accessibilityRole="button"
+          accessibilityLabel="Guardar configuración"
         >
           <View style={[styles.shutterInner, { backgroundColor: isReadyToCapture ? palette.deepSkyBlue : colors.surface }]}>
             <Camera width={32} height={32} color={isReadyToCapture ? "#FFFFFF" : colors.textSecondary} strokeWidth={2} />
@@ -176,72 +167,47 @@ export default function StudioConfigScreen() {
             setLandmarksData([]);
             setFacingMode((prev) => prev === 'user' ? 'environment' : 'user');
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Cambiar de cámara"
         >
           <Refresh width={24} height={24} color={colors.text} />
         </Pressable>
       </View>
 
-      <Modal animationType="fade" transparent={true} visible={isSettingsOpen} onRequestClose={() => setIsSettingsOpen(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setIsSettingsOpen(false)} />
+      <SheetModal
+        visible={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        title="Detalles de Configuración"
+        footer={
+          <Button
+            title="Confirmar Datos"
+            color={palette.deepSkyBlue}
+            textColor="#FFFFFF"
+            icon={<Check width={20} height={20} color="#FFFFFF" strokeWidth={2.5} />}
+            onPress={() => setIsSettingsOpen(false)}
+            disabled={!isFormValid}
+            style={{ flex: 1, opacity: !isFormValid ? 0.6 : 1 }}
+          />
+        }
+      >
+        <FormField
+          label="Nombre de la forma"
+          required
+          placeholder="Ej: Letra A, Índice extendido"
+          value={manualConfigName}
+          onChangeText={setManualConfigName}
+          autoFocus
+          returnKeyType="next"
+        />
 
-          <Card style={[styles.dialogCard, { backgroundColor: colors.background, maxHeight: '90%' }]}>
-            <View style={styles.dialogHeader}>
-              <Typography variant="h2">Detalles de Configuración</Typography>
-              <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} strokeWidth={2} />} backgroundColor={colors.surface} onPress={() => setIsSettingsOpen(false)} />
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.dialogBody}>
-              <Typography variant="subtitle" color={colors.textSecondary} style={{ marginBottom: 8, letterSpacing: 0.5 }}>NOMBRE DE LA FORMA *</Typography>
-              <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.input, borderColor: manualConfigName ? palette.deepSkyBlue : colors.border, marginBottom: 24 }]}
-                placeholder="Ej: Letra A, Índice extendido..."
-                placeholderTextColor={colors.textSecondary}
-                value={manualConfigName}
-                onChangeText={setManualConfigName}
-              />
-
-              <Typography variant="subtitle" color={colors.textSecondary} style={{ marginBottom: 8, letterSpacing: 0.5 }}>TIPS DE APRENDIZAJE (OPCIONAL)</Typography>
-              <View style={styles.inputRow}>
-                <TextInput 
-                  style={[styles.input, { flex: 1, color: colors.text, backgroundColor: colors.input, borderColor: currentTip ? palette.deepSkyBlue : colors.border }]} 
-                  placeholder="Ej: Parece un perro..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={currentTip} 
-                  onChangeText={setCurrentTip} 
-                  onSubmitEditing={handleAddTip} 
-                />
-                <Pressable style={[styles.addBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={handleAddTip} disabled={!currentTip.trim()}>
-                  <Plus width={24} height={24} color={currentTip.trim() ? palette.deepSkyBlue : colors.textSecondary} />
-                </Pressable>
-              </View>
-
-              <View style={styles.chipsWrapContainer}>
-                {learningTips.map((tip, index) => (
-                  <View key={`tip-${index}`} style={[styles.chip, { backgroundColor: palette.deepSkyBlue }]}>
-                    <Typography variant="label" color="#FFFFFF">{tip}</Typography>
-                    <Pressable onPress={() => handleRemoveTip(tip)} style={styles.chipRemoveBtn}>
-                      <Xmark width={16} height={16} color="#FFFFFF" />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-
-            <View style={[styles.dialogFooter, { borderTopColor: colors.border }]}>
-              <Button
-                title="Confirmar Datos"
-                color={palette.deepSkyBlue}
-                textColor="#FFFFFF"
-                icon={<Check width={20} height={20} color="#FFFFFF" strokeWidth={2.5} />}
-                onPress={() => setIsSettingsOpen(false)}
-                disabled={!isFormValid}
-                style={{ flex: 1, opacity: !isFormValid ? 0.6 : 1 }}
-              />
-            </View>
-          </Card>
-        </KeyboardAvoidingView>
-      </Modal>
+        <TagField
+          label="Tips de aprendizaje"
+          hint="Opcional. Se muestran al estudiante mientras practica."
+          placeholder="Ej: Parece un perro"
+          tags={learningTips}
+          onChange={setLearningTips}
+        />
+      </SheetModal>
 
     </SafeAreaView>
   );
@@ -260,17 +226,4 @@ const styles = StyleSheet.create({
   settingsButton: { width: 56, height: 56, borderRadius: 28, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   shutterButton: { width: 84, height: 84, borderRadius: 42, borderWidth: 4, alignItems: 'center', justifyContent: 'center' },
   shutterInner: { width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center' },
-  spacer: { width: 56 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end', alignItems: 'center' },
-  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  dialogCard: { width: '100%', padding: 0, overflow: 'hidden', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderTopLeftRadius: 32, borderTopRightRadius: 32 },
-  dialogHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingBottom: 16 },
-  dialogBody: { paddingHorizontal: 24, paddingBottom: 24 },
-  inputRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  input: { fontSize: 16, borderRadius: 20, paddingVertical: 16, paddingHorizontal: 20, fontWeight: '600', borderWidth: 2 },
-  addBtn: { width: 56, justifyContent: 'center', alignItems: 'center', borderRadius: 20, borderWidth: 2 },
-  chipsWrapContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  chip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingLeft: 14, paddingRight: 8, borderRadius: 20, gap: 8 },
-  chipRemoveBtn: { padding: 4, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.2)' },
-  dialogFooter: { flexDirection: 'row', gap: 12, padding: 24, paddingTop: 16, borderTopWidth: 1 },
 });
