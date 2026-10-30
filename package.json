@@ -14,6 +14,7 @@
     "build:studio": "eas build --profile preview-studio --platform android"
   },
   "dependencies": {
+    "@dr.pogodin/react-native-fs": "2.40.4",
     "@dr.pogodin/react-native-static-server": "^0.28.1",
     "@expo-google-fonts/poppins": "^0.4.1",
     "@pixiv/three-vrm": "^3.5.5",
