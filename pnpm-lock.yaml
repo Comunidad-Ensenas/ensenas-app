@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  three: ^0.184.0
+
 importers:
 
   .:
@@ -42,7 +45,7 @@ importers:
         specifier: ~55.0.8
         version: 55.0.20(expo@55.0.32)(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0)(supports-color@8.1.1)(typescript@5.9.3)
       expo-build-properties:
-        specifier: ~55.0.10
+        specifier: ~55.0.18
         version: 55.0.18(expo@55.0.32)
       expo-constants:
         specifier: ~55.0.7
@@ -1414,42 +1417,42 @@ packages:
   '@monogrid/gainmap-js@3.7.2':
     resolution: {integrity: sha512-nwbyP5gskF1clzuEynSG8uqmLhZYDkQa0zZYBQmh30OoVVqaDaZOUy93NIDjdTJB34go3mqVAQgxJKBlStOnig==}
     peerDependencies:
-      three: '>= 0.159.0'
+      three: ^0.184.0
 
   '@pixiv/three-vrm-core@3.5.5':
     resolution: {integrity: sha512-jjaXZbMVRsk2HAGVxqDLmSJyGOJqbMcJpuTHR1TY/TN1FxiKdAzSqdr/ZUcczYipNf8IL9vDT9NX2XmWj+ybRQ==}
     peerDependencies:
-      three: '>=0.137'
+      three: ^0.184.0
 
   '@pixiv/three-vrm-materials-hdr-emissive-multiplier@3.5.5':
     resolution: {integrity: sha512-XnHEqpY4ctYMucpeRcptdphOe0RrW7V5fUvojasD8Ja4MTjjrjCNFxsAvp3+HBkPZbkTM2sDCjJBJNzxN1scrA==}
     peerDependencies:
-      three: '>=0.137'
+      three: ^0.184.0
 
   '@pixiv/three-vrm-materials-mtoon@3.5.5':
     resolution: {integrity: sha512-7lThHf4OKBOsVenD+R6L6HffNUlKO3Twnhr3+z77MnUsSzsOanjVKJtjSIly9QJ6hgl8YJmI6RnxCKqXcpplog==}
     peerDependencies:
-      three: '>=0.137'
+      three: ^0.184.0
 
   '@pixiv/three-vrm-materials-v0compat@3.5.5':
     resolution: {integrity: sha512-NjsTK4P4qdcr+RoL2gEUNgF2CY/aplNvyHHxI99N7D6CxDZ2H93FQ9aIuLCABj5b+4CIvldWMCcnS7YuLIr3Lw==}
     peerDependencies:
-      three: '>=0.137'
+      three: ^0.184.0
 
   '@pixiv/three-vrm-node-constraint@3.5.5':
     resolution: {integrity: sha512-+ShEXioZ5Ctf0EZ5ZViZ4n0jhV/qtJRH0Juw8nRnMNODZXDSr+B3An2lrfRoMhowCzG63GiUG4lXWV9noMXosA==}
     peerDependencies:
-      three: '>=0.137'
+      three: ^0.184.0
 
   '@pixiv/three-vrm-springbone@3.5.5':
     resolution: {integrity: sha512-GWAWrIegGH/u1ZA+Es03Qzc2yafrQOrhtal9jzUIAgU8Wm2DYuqAABOY+du/9RpBRK8D4T8DBPvRGQqvfrQ/uA==}
     peerDependencies:
-      three: '>=0.137'
+      three: ^0.184.0
 
   '@pixiv/three-vrm@3.5.5':
     resolution: {integrity: sha512-RPXy7jYAXs704NIpZlosB0U2ENu21G9DrqGWdQgRe8dShaCo1ugpj+6BVPRCy91nt+MPMA96j5rbsSzEl0HlQA==}
     peerDependencies:
-      three: '>=0.137'
+      three: ^0.184.0
 
   '@pixiv/types-vrm-0.0@3.5.5':
     resolution: {integrity: sha512-2S/0jswMjJTwL9ky8YzDR0CIaP6ZmE+HFuyW/0h+SA+awELf+J7WGgC8lTLM1MXzokO7Z2YVljU2F0fEhlKDIQ==}
@@ -1836,7 +1839,7 @@ packages:
       '@react-three/fiber': ^9.0.0
       react: ^19
       react-dom: ^19
-      three: '>=0.159'
+      three: ^0.184.0
     peerDependenciesMeta:
       react-dom:
         optional: true
@@ -1851,7 +1854,7 @@ packages:
       react: '>=19 <19.4'
       react-dom: '>=19 <19.4'
       react-native: '>=0.78'
-      three: '>=0.156'
+      three: ^0.184.0
     peerDependenciesMeta:
       expo:
         optional: true
@@ -2218,7 +2221,7 @@ packages:
     resolution: {integrity: sha512-xkxfpG2ECZ6Ww5/9+kf4mfg1VEYAoe9aDSY+IwF0UEs7qEzwy0aVRfs2grImIECs/PoBtWFrh7RXsQkwG922JA==}
     engines: {node: '>=22.0.0', npm: '>=10.5.1'}
     peerDependencies:
-      three: '>=0.126.1'
+      three: ^0.184.0
 
   caniuse-lite@1.0.30001819:
     resolution: {integrity: sha512-LFUqIIAwpzsIuevnKnsR9qnStBcgzPShTX61lBwN9uFkkf8o8zLiebEjbW8AYtZiF+1YKDWfdt/pWDtMuG8Xwg==}
@@ -3263,7 +3266,7 @@ packages:
     resolution: {integrity: sha512-tRvbDF0Pgqz+9XUa4jjfgAQ8/aPKmQdWXilFu2tMy4GWj4NOsx99HlULO4IeREfbO3a0sA145DZYyvXPkybm0g==}
     peerDependencies:
       '@types/three': '>=0.134.0'
-      three: '>=0.134.0'
+      three: ^0.184.0
 
   makeerror@1.0.12:
     resolution: {integrity: sha512-JmqCvUhmt43madlpFzG4BQzG2Z3m6tvQDNKdClZnO3VbIudJYmxsT0FNJMeiB2+JTSlTQTSbU8QdesVmwJcmLg==}
@@ -3290,7 +3293,7 @@ packages:
   meshline@3.3.1:
     resolution: {integrity: sha512-/TQj+JdZkeSUOl5Mk2J7eLcYTLiQm2IDzmlSvYm7ov15anEcDJ92GHqqazxTSreeNgfnYu24kiEvvv0WlbCdFQ==}
     peerDependencies:
-      three: '>=0.137'
+      three: ^0.184.0
 
   meshoptimizer@1.1.1:
     resolution: {integrity: sha512-oRFNWJRDA/WTrVj7NWvqa5HqE1t9MYDj2VaWirQCzCCrAd2GHrqR/sQezCxiWATPNlKTcRaPRHPJwIRoPBAp5g==}
@@ -3954,7 +3957,7 @@ packages:
     resolution: {integrity: sha512-g5O9B0hm9CvnM36+v7SFl39T7hmAlv541tU81ME8YeSb3i1CIP5/QdDeSB3A0la0bKNHpxpwxOVRo2wFTYEosQ==}
     peerDependencies:
       '@types/three': '*'
-      three: '*'
+      three: ^0.184.0
 
   stats.js@0.17.0:
     resolution: {integrity: sha512-hNKz8phvYLPEcRkeG1rsGmV5ChMjKDAWU7/OJJdDErPBNChQXxCo3WZurGpnWc6gZhAzEPFad1aVgyOANH1sMw==}
@@ -4037,12 +4040,12 @@ packages:
   three-mesh-bvh@0.8.3:
     resolution: {integrity: sha512-4G5lBaF+g2auKX3P0yqx+MJC6oVt6sB5k+CchS6Ob0qvH0YIhuUk1eYr7ktsIpY+albCqE80/FVQGV190PmiAg==}
     peerDependencies:
-      three: '>= 0.159.0'
+      three: ^0.184.0
 
   three-stdlib@2.36.1:
     resolution: {integrity: sha512-XyGQrFmNQ5O/IoKm556ftwKsBg11TIb301MB5dWNicziQBEs2g3gtOYIf7pFiLa0zI2gUwhtCjv9fmjnxKZ1Cg==}
     peerDependencies:
-      three: '>=0.128.0'
+      three: ^0.184.0
 
   three@0.184.0:
     resolution: {integrity: sha512-wtTRjG92pM5eUg/KuUnHsqSAlPM296brTOcLgMRqEeylYTh/CdtvKUvCyyCQTzFuStieWxvZb8mVTMvdPyUpxg==}
@@ -4070,12 +4073,12 @@ packages:
   troika-three-text@0.52.5:
     resolution: {integrity: sha512-Ry3jRhic9pzcY4JduSvRRyDmVOSqEW19gT4vtK+aCiPNVcDlmkxvGG0YbFd36RTDq1wExOupXnvNF/j1oiHHDA==}
     peerDependencies:
-      three: '>=0.125.0'
+      three: ^0.184.0
 
   troika-three-utils@0.52.5:
     resolution: {integrity: sha512-WsePbcX8RtfidRfsxK1eCZCjF81ZDzAKHH/evLs0hdV2wpoCb0vArGZHdzdOJrSS3k4zfdtbKDaBh8+phkrYnw==}
     peerDependencies:
-      three: '>=0.125.0'
+      three: ^0.184.0
 
   troika-worker-utils@0.52.0:
     resolution: {integrity: sha512-W1CpvTHykaPH5brv5VHLfQo9D1OYuo0cSBEUQFFT/nBUzM8iD6Lq2/tgG/f1OelbAS1WtaTPQzE5uM49egnngw==}
@@ -5543,7 +5546,7 @@ snapshots:
       metro-resolver: 0.83.8
       metro-runtime: 0.83.8
       metro-source-map: 0.83.8(supports-color@8.1.1)
-      metro-symbolicate: 0.83.8
+      metro-symbolicate: 0.83.8(supports-color@8.1.1)
       metro-transform-plugins: 0.83.8(supports-color@8.1.1)
       metro-transform-worker: 0.83.8(supports-color@8.1.1)
     transitivePeerDependencies:
@@ -7802,7 +7805,7 @@ snapshots:
       '@babel/types': 7.29.11
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
-      metro-symbolicate: 0.83.8
+      metro-symbolicate: 0.83.8(supports-color@8.1.1)
       nullthrows: 1.1.1
       ob1: 0.83.8
       source-map: 0.5.7
@@ -7810,7 +7813,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  metro-symbolicate@0.83.8:
+  metro-symbolicate@0.83.8(supports-color@8.1.1):
     dependencies:
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
@@ -7818,6 +7821,8 @@ snapshots:
       nullthrows: 1.1.1
       source-map: 0.5.7
       vlq: 1.0.1
+    transitivePeerDependencies:
+      - supports-color
 
   metro-transform-plugins@0.83.8(supports-color@8.1.1):
     dependencies:
@@ -7880,7 +7885,7 @@ snapshots:
       metro-resolver: 0.83.8
       metro-runtime: 0.83.8
       metro-source-map: 0.83.8(supports-color@8.1.1)
-      metro-symbolicate: 0.83.8
+      metro-symbolicate: 0.83.8(supports-color@8.1.1)
       metro-transform-plugins: 0.83.8(supports-color@8.1.1)
       metro-transform-worker: 0.83.8(supports-color@8.1.1)
       mime-types: 3.0.2

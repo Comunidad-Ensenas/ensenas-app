@@ -2,6 +2,7 @@
   "name": "ensenas",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "packageManager": "pnpm@11.27.0",
   "scripts": {
     "eas-build-pre-install": "node .eas/build/switch-env.js",
     "start": "node .eas/build/switch-env.js learner && expo start",
@@ -24,7 +25,7 @@
     "drizzle-orm": "^0.45.1",
     "expo": "~55.0.4",
     "expo-asset": "~55.0.8",
-    "expo-build-properties": "~55.0.10",
+    "expo-build-properties": "~55.0.18",
     "expo-constants": "~55.0.7",
     "expo-dev-client": "~55.0.28",
     "expo-device": "~55.0.15",
@@ -60,11 +61,6 @@
     "babel-plugin-inline-import": "^3.0.0",
     "drizzle-kit": "^0.31.9",
     "typescript": "~5.9.2"
-  },
-  "pnpm": {
-    "overrides": {
-      "three": "^0.184.0"
-    }
   },
   "private": true
 }
