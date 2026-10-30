@@ -116,7 +116,11 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
     let loadedTexture: THREE.Texture | null = null;
 
     async function loadAvatar() {
+<<<<<<< HEAD
       const vrmModelName = 'bizdude';
+=======
+      const vrmModelName = "crimsom";
+>>>>>>> main
 
       try {
         const vrmAsset = Asset.fromModule(require(`../../assets/3d/${vrmModelName}/avatar_debug.vrm`));

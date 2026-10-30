@@ -1,7 +1,8 @@
 import { Button } from '@/components/common/Button';
-import { Card } from '@/components/common/Card';
-import { IconButton } from '@/components/common/IconButton';
 import { Typography } from '@/components/common/Typography';
+import { PickerModal } from '@/components/studio/PickerModal';
+import { SheetModal } from '@/components/studio/SheetModal';
+import { TagField } from '@/components/studio/TagField';
 import { useCameraServer } from '@/context/CameraServerContext';
 import { db } from '@/db';
 import { manualConfigurations } from '@/db/schema';
@@ -13,9 +14,9 @@ import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Camera, Check, Pause, Plus, Refresh, Search, Settings, Xmark } from 'iconoir-react-native';
+import { Camera, Check, NavArrowRight, Pause, Refresh, Settings, Xmark } from 'iconoir-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraPermission } from 'react-native-vision-camera';
 import { WebView } from 'react-native-webview';
@@ -80,14 +81,11 @@ export default function StudioCaptureScreen() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConfigSelectorOpen, setIsConfigSelectorOpen] = useState(false);
   const [selectingHand, setSelectingHand] = useState<'dominant' | 'recessive' | null>(null);
-  
-  const [searchQuery, setSearchQuery] = useState('');
+
   const [selectedDominantConfig, setSelectedDominantConfig] = useState<any | null>(null);
   const [selectedRecessiveConfig, setSelectedRecessiveConfig] = useState<any | null>(null);
-  
-  const [currentMeaning, setCurrentMeaning] = useState('');
+
   const [meaningsList, setMeaningsList] = useState<string[]>([]);
-  const [currentTip, setCurrentTip] = useState('');
   const [learningTips, setLearningTips] = useState<string[]>([]);
   
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -193,30 +191,6 @@ export default function StudioCaptureScreen() {
     } catch (error) {}
   }, [isRecording]);
 
-  const handleAddMeaning = () => {
-    const trimmedMeaning = currentMeaning.trim();
-    if (trimmedMeaning && !meaningsList.includes(trimmedMeaning)) {
-      setMeaningsList([...meaningsList, trimmedMeaning]);
-      setCurrentMeaning('');
-    }
-  };
-
-  const handleRemoveMeaning = (meaningToRemove: string) => {
-    setMeaningsList(meaningsList.filter((meaning) => meaning !== meaningToRemove));
-  };
-
-  const handleAddTip = () => {
-    const trimmedTip = currentTip.trim();
-    if (trimmedTip && !learningTips.includes(trimmedTip)) {
-      setLearningTips([...learningTips, trimmedTip]);
-      setCurrentTip('');
-    }
-  };
-
-  const handleRemoveTip = (tipToRemove: string) => {
-    setLearningTips(learningTips.filter((tip) => tip !== tipToRemove));
-  };
-
   const saveEditedMetadataOnly = async () => {
     if (!selectedDominantConfig || meaningsList.length === 0) return;
     try {
@@ -306,9 +280,7 @@ export default function StudioCaptureScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
       setMeaningsList([]);
-      setCurrentMeaning('');
       setLearningTips([]);
-      setCurrentTip('');
       setSelectedDominantConfig(null);
       setSelectedRecessiveConfig(null);
       setOriginalAnimationFile(null);
@@ -322,7 +294,6 @@ export default function StudioCaptureScreen() {
 
   const openConfigSelector = (hand: 'dominant' | 'recessive') => {
     setSelectingHand(hand);
-    setSearchQuery('');
     setIsConfigSelectorOpen(true);
   };
 
@@ -331,12 +302,6 @@ export default function StudioCaptureScreen() {
     else setSelectedRecessiveConfig(config);
     setIsConfigSelectorOpen(false);
   };
-
-  const filteredConfigs = useMemo(() => {
-    return availableConfigs.filter((config) =>
-      config.name?.toLowerCase().includes(searchQuery.toLowerCase().trim())
-    );
-  }, [availableConfigs, searchQuery]);
 
   const htmlContent = useMemo(() => {
     if (!serverUrl) return '';
@@ -394,6 +359,8 @@ export default function StudioCaptureScreen() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setIsSettingsOpen(true);
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Editar detalles de la seña"
         >
           <Settings width={24} height={24} color={isFormValid ? colors.text : '#000'} />
         </Pressable>
@@ -405,6 +372,8 @@ export default function StudioCaptureScreen() {
         style={[styles.shutterButton, { borderColor: isRecording || countdown !== null ? '#EF4444' : isReady && isFormValid ? palette.deepSkyBlue : colors.border, opacity: isReady ? 1 : 0.5 }]} 
         onPress={toggleRecording} 
         disabled={!isReady}
+        accessibilityRole="button"
+        accessibilityLabel={isRecording ? 'Detener grabación' : 'Iniciar grabación'}
       >
         <View style={[styles.shutterInner, { backgroundColor: isRecording || countdown !== null ? '#EF4444' : isReady && isFormValid ? palette.deepSkyBlue : colors.surface }]}>
           {isRecording ? (
@@ -425,6 +394,8 @@ export default function StudioCaptureScreen() {
             setIsReady(false);
             setFacingMode((prev) => prev === 'user' ? 'environment' : 'user');
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Cambiar de cámara"
         >
           <Refresh width={24} height={24} color={colors.text} />
         </Pressable>
@@ -435,158 +406,102 @@ export default function StudioCaptureScreen() {
   );
 
   const renderSettingsModal = () => (
-    <Modal visible={isSettingsOpen} transparent={true} animationType="fade" onRequestClose={() => setIsSettingsOpen(false)}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setIsSettingsOpen(false)} />
-        <Card style={[styles.dialogCard, { backgroundColor: colors.background, maxHeight: '90%' }]}>
-          <View style={styles.dialogHeader}>
-            <Typography variant="h2">{signId ? 'Editar Detalles' : 'Detalles de la Seña'}</Typography>
-            <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} />} backgroundColor={colors.surface} onPress={() => setIsSettingsOpen(false)} />
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.dialogBody}>
-            <Typography variant="subtitle" color={colors.textSecondary}>MANO DOMINANTE *</Typography>
-            <Pressable style={[styles.selectInput, { backgroundColor: colors.input, borderColor: selectedDominantConfig ? palette.deepSkyBlue : colors.border }]} onPress={() => openConfigSelector('dominant')}>
-              <Typography variant="body" color={selectedDominantConfig ? colors.text : colors.textSecondary}>
-                {selectedDominantConfig ? selectedDominantConfig.name : 'Seleccionar...'}
-              </Typography>
-            </Pressable>
-
-            <Typography variant="subtitle" color={colors.textSecondary} style={styles.marginTop24}>MANO RECESIVA</Typography>
-            <Pressable style={[styles.selectInput, { backgroundColor: colors.input, borderColor: colors.border }]} onPress={() => openConfigSelector('recessive')}>
-              <Typography variant="body" color={selectedRecessiveConfig ? colors.text : colors.textSecondary}>
-                {selectedRecessiveConfig ? selectedRecessiveConfig.name : 'Ninguna'}
-              </Typography>
-            </Pressable>
-
-            <Typography variant="subtitle" color={colors.textSecondary} style={styles.marginTop24}>SIGNIFICADOS *</Typography>
-            <View style={styles.inputRow}>
-              <TextInput 
-                style={[styles.input, { color: colors.text, backgroundColor: colors.input, borderColor: currentMeaning ? palette.deepSkyBlue : 'transparent' }]} 
-                value={currentMeaning} 
-                onChangeText={setCurrentMeaning} 
-                onSubmitEditing={handleAddMeaning} 
-              />
-              <Pressable style={[styles.addBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={handleAddMeaning} disabled={!currentMeaning.trim()}>
-                <Plus width={24} height={24} color={currentMeaning.trim() ? palette.deepSkyBlue : colors.textSecondary} />
-              </Pressable>
-            </View>
-
-            <View style={styles.meaningsWrapper}>
-              <View style={styles.chipsWrapContainer}>
-                {meaningsList.map((meaning, index) => (
-                  <View key={index} style={[styles.chip, { backgroundColor: palette.deepSkyBlue }]}>
-                    <Typography variant="label" color="#FFFFFF">{meaning}</Typography>
-                    <Pressable onPress={() => handleRemoveMeaning(meaning)} style={styles.chipRemoveBtn}>
-                      <Xmark width={16} height={16} color="#FFFFFF" />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <Typography variant="subtitle" color={colors.textSecondary} style={styles.marginTop24}>TIPS DE APRENDIZAJE (OPCIONAL)</Typography>
-            <View style={styles.inputRow}>
-              <TextInput 
-                style={[styles.input, { color: colors.text, backgroundColor: colors.input, borderColor: currentTip ? palette.deepSkyBlue : 'transparent' }]} 
-                placeholder="Ej: Recuerda la postura recta..."
-                placeholderTextColor={colors.textSecondary}
-                value={currentTip} 
-                onChangeText={setCurrentTip} 
-                onSubmitEditing={handleAddTip} 
-              />
-              <Pressable style={[styles.addBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={handleAddTip} disabled={!currentTip.trim()}>
-                <Plus width={24} height={24} color={currentTip.trim() ? palette.deepSkyBlue : colors.textSecondary} />
-              </Pressable>
-            </View>
-
-            <View style={styles.meaningsWrapper}>
-              <View style={styles.chipsWrapContainer}>
-                {learningTips.map((tip, index) => (
-                  <View key={`tip-${index}`} style={[styles.chip, { backgroundColor: palette.deepSkyBlue }]}>
-                    <Typography variant="label" color="#FFFFFF">{tip}</Typography>
-                    <Pressable onPress={() => handleRemoveTip(tip)} style={styles.chipRemoveBtn}>
-                      <Xmark width={16} height={16} color="#FFFFFF" />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            </View>
-          </ScrollView>
-
-          <View style={[styles.dialogFooter, { borderTopColor: colors.border }]}>
-            {signId && (
-              <Button 
-                title="Guardar Solo Textos" 
-                color={colors.surface} 
-                textColor={colors.text} 
-                onPress={saveEditedMetadataOnly} 
-                disabled={!isFormValid} 
-                style={[styles.saveMetadataBtn, { borderColor: colors.border, opacity: !isFormValid ? 0.6 : 1 }]} 
-              />
-            )}
-            <Button 
-              title={signId ? "Listo para Regrabar" : "Confirmar Detalles"} 
-              color={palette.deepSkyBlue} 
-              textColor="#FFFFFF" 
-              icon={<Check width={20} height={20} color="#FFFFFF" />} 
-              onPress={() => setIsSettingsOpen(false)} 
-              disabled={!isFormValid} 
-              style={{ opacity: !isFormValid ? 0.6 : 1 }} 
+    <SheetModal
+      visible={isSettingsOpen}
+      onClose={() => setIsSettingsOpen(false)}
+      title={signId ? 'Editar Detalles' : 'Detalles de la Seña'}
+      footer={
+        <View style={styles.footerColumn}>
+          {signId ? (
+            <Button
+              title="Guardar Solo Textos"
+              color={colors.surface}
+              textColor={colors.text}
+              onPress={saveEditedMetadataOnly}
+              disabled={!isFormValid}
+              style={[styles.saveMetadataBtn, { borderColor: colors.border, opacity: !isFormValid ? 0.6 : 1 }]}
             />
-          </View>
-        </Card>
-      </KeyboardAvoidingView>
-    </Modal>
+          ) : null}
+          <Button
+            title={signId ? "Listo para Regrabar" : "Confirmar Detalles"}
+            color={palette.deepSkyBlue}
+            textColor="#FFFFFF"
+            icon={<Check width={20} height={20} color="#FFFFFF" />}
+            onPress={() => setIsSettingsOpen(false)}
+            disabled={!isFormValid}
+            style={{ opacity: !isFormValid ? 0.6 : 1 }}
+          />
+        </View>
+      }
+    >
+      <View>
+        <Typography variant="label" color={colors.textSecondary} style={styles.fieldLabel}>
+          MANO DOMINANTE *
+        </Typography>
+        <Pressable
+          style={[styles.selectInput, { backgroundColor: colors.input, borderColor: selectedDominantConfig ? palette.deepSkyBlue : colors.border }]}
+          onPress={() => openConfigSelector('dominant')}
+          accessibilityRole="button"
+          accessibilityLabel="Seleccionar mano dominante"
+        >
+          <Typography variant="body" color={selectedDominantConfig ? colors.text : colors.textSecondary} numberOfLines={1} style={{ flex: 1 }}>
+            {selectedDominantConfig ? selectedDominantConfig.name : 'Seleccionar'}
+          </Typography>
+          <NavArrowRight width={18} height={18} color={colors.textSecondary} />
+        </Pressable>
+      </View>
+
+      <View>
+        <Typography variant="label" color={colors.textSecondary} style={styles.fieldLabel}>
+          MANO RECESIVA
+        </Typography>
+        <Pressable
+          style={[styles.selectInput, { backgroundColor: colors.input, borderColor: selectedRecessiveConfig ? palette.deepSkyBlue : colors.border }]}
+          onPress={() => openConfigSelector('recessive')}
+          accessibilityRole="button"
+          accessibilityLabel="Seleccionar mano recesiva"
+        >
+          <Typography variant="body" color={selectedRecessiveConfig ? colors.text : colors.textSecondary} numberOfLines={1} style={{ flex: 1 }}>
+            {selectedRecessiveConfig ? selectedRecessiveConfig.name : 'Ninguna'}
+          </Typography>
+          <NavArrowRight width={18} height={18} color={colors.textSecondary} />
+        </Pressable>
+      </View>
+
+      <TagField
+        label="Significados"
+        required
+        hint="Escribe un significado y pulsa + para agregar otro."
+        placeholder="Ej: Hola"
+        tags={meaningsList}
+        onChange={setMeaningsList}
+      />
+
+      <TagField
+        label="Tips de aprendizaje"
+        hint="Opcional."
+        placeholder="Ej: Recuerda la postura recta"
+        tags={learningTips}
+        onChange={setLearningTips}
+      />
+    </SheetModal>
   );
 
   const renderConfigSelectorModal = () => (
-    <Modal visible={isConfigSelectorOpen} transparent={true} animationType="slide" onRequestClose={() => setIsConfigSelectorOpen(false)}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setIsConfigSelectorOpen(false)} />
-        <Card style={[styles.dialogCard, { backgroundColor: colors.background, height: '80%' }]}>
-          <View style={[styles.dialogHeader, styles.paddingBottom16]}>
-            <Typography variant="h2">Buscar Configuración</Typography>
-            <IconButton size={36} icon={<Xmark width={22} height={22} color={colors.text} />} backgroundColor={colors.surface} onPress={() => setIsConfigSelectorOpen(false)} />
-          </View>
-
-          <View style={[styles.searchBarWrapper, { borderBottomColor: colors.border }]}>
-            <View style={[styles.searchBar, { backgroundColor: colors.input }]}>
-              <Search width={20} height={20} color={colors.textSecondary} />
-              <TextInput style={[styles.searchInput, { color: colors.text }]} value={searchQuery} onChangeText={setSearchQuery} autoFocus={true} />
-            </View>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={styles.configScrollContent}>
-            {selectingHand === 'recessive' && (
-              <Pressable style={[styles.configListItem, { borderBottomColor: colors.border }]} onPress={() => selectConfig(null)}>
-                <Typography variant="body" color={colors.textSecondary}>Ninguna (Quitar)</Typography>
-              </Pressable>
-            )}
-
-            {filteredConfigs.length > 0 ? (
-              filteredConfigs.map((config) => (
-                <Pressable key={`search-${config.id}`} style={[styles.configListItem, { borderBottomColor: colors.border }]} onPress={() => selectConfig(config)}>
-                  <View style={styles.configListItemInner}>
-                    <Typography variant="body" color={colors.text}>{config.name}</Typography>
-                    {config.isLocal && (
-                      <View style={[styles.newBadge, { backgroundColor: palette.powderBlush }]}>
-                        <Typography variant="label" color="#111" style={styles.newBadgeText}>NUEVO</Typography>
-                      </View>
-                    )}
-                  </View>
-                  <Plus width={20} height={20} color={palette.deepSkyBlue} />
-                </Pressable>
-              ))
-            ) : (
-              <View style={styles.emptyStateContainer}>
-                <Typography variant="body" color={colors.textSecondary}>No resultados.</Typography>
-              </View>
-            )}
-          </ScrollView>
-        </Card>
-      </KeyboardAvoidingView>
-    </Modal>
+    <PickerModal
+      visible={isConfigSelectorOpen}
+      onClose={() => setIsConfigSelectorOpen(false)}
+      title="Buscar Configuración"
+      items={availableConfigs.map((config) => ({
+        id: config.id,
+        label: config.name || 'Configuración sin nombre',
+        isLocal: config.isLocal,
+      }))}
+      onSelect={(item) => selectConfig(availableConfigs.find((config) => config.id === item.id) ?? null)}
+      searchPlaceholder="Buscar configuración"
+      emptyText="No se encontraron configuraciones."
+      clearAction={selectingHand === 'recessive' ? { label: 'Ninguna (Quitar)', onPress: () => selectConfig(null) } : undefined}
+    />
   );
 
   if (!hasPermission || !serverUrl) {
@@ -635,30 +550,8 @@ const styles = StyleSheet.create({
   shutterButton: { width: 84, height: 84, borderRadius: 42, borderWidth: 4, alignItems: 'center', justifyContent: 'center' },
   shutterInner: { width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center' },
   spacer: { width: 56 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end', alignItems: 'center' },
-  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  dialogCard: { width: '100%', padding: 0, overflow: 'hidden', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderTopLeftRadius: 32, borderTopRightRadius: 32 },
-  dialogHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingBottom: 16 },
-  dialogBody: { paddingHorizontal: 24, paddingBottom: 24 },
-  selectInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 18, borderRadius: 20, borderWidth: 2 },
-  inputRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  input: { flex: 1, fontSize: 16, borderRadius: 20, paddingVertical: 16, paddingHorizontal: 20, fontWeight: '600', borderWidth: 2 },
-  addBtn: { width: 56, justifyContent: 'center', alignItems: 'center', borderRadius: 20, borderWidth: 2 },
-  meaningsWrapper: { minHeight: 44, justifyContent: 'flex-start' },
-  chipsWrapContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  chip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingLeft: 14, paddingRight: 8, borderRadius: 20, gap: 8 },
-  chipRemoveBtn: { padding: 4, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.2)' },
-  dialogFooter: { padding: 24, paddingTop: 16, borderTopWidth: 1, flexDirection: 'column', gap: 12 },
+  footerColumn: { flex: 1, gap: 12 },
+  fieldLabel: { letterSpacing: 0.5, marginBottom: 8 },
+  selectInput: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 18, borderRadius: 20, borderWidth: 2 },
   saveMetadataBtn: { borderWidth: 1 },
-  searchBarWrapper: { paddingHorizontal: 24, paddingBottom: 16, borderBottomWidth: 1 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, gap: 10 },
-  searchInput: { flex: 1, fontSize: 16, fontWeight: '500' },
-  configScrollContent: { padding: 24 },
-  configListItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1 },
-  configListItemInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  newBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  newBadgeText: { fontSize: 10 },
-  emptyStateContainer: { padding: 40, alignItems: 'center' },
-  marginTop24: { marginTop: 24 },
-  paddingBottom16: { paddingBottom: 16 }
 });

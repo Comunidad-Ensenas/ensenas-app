@@ -29,7 +29,7 @@
       "permissions": [
         "android.permission.CAMERA"
       ],
-      "package": "com.anonymous.ensenas",
+      "package": "com.anonymous.ensenas"
     },
     "web": {
       "bundler": "metro",
@@ -63,7 +63,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "0a7bcac6-b4bc-4c7c-bd43-867ec6e4ea33"
+        "projectId": "6bf40891-6dac-451e-9533-a2de62ca86f5"
       }
     }
   }

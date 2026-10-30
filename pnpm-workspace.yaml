@@ -2,3 +2,5 @@ allowBuilds:
   '@shopify/react-native-skia': false
   esbuild: true
 nodeLinker: hoisted
+overrides:
+  three: ^0.184.0

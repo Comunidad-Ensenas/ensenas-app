@@ -46,6 +46,7 @@ yarn-error.*
 
 graphify-out/
 AGENTS.md
+ROADMAP.md
 .idea/
 .vscode/
 
