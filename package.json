@@ -14,7 +14,7 @@
     "build:studio": "eas build --profile preview-studio --platform android"
   },
   "dependencies": {
-    "@dr.pogodin/react-native-static-server": "^0.26.0",
+    "@dr.pogodin/react-native-static-server": "^0.28.1",
     "@expo-google-fonts/poppins": "^0.4.1",
     "@pixiv/three-vrm": "^3.5.5",
     "@react-native-async-storage/async-storage": "2.2.0",

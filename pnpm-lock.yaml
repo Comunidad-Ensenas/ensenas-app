@@ -12,8 +12,8 @@ importers:
   .:
     dependencies:
       '@dr.pogodin/react-native-static-server':
-        specifier: ^0.26.0
-        version: 0.26.2(@dr.pogodin/react-native-fs@2.41.0(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0))(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0)
+        specifier: ^0.28.1
+        version: 0.28.1(@dr.pogodin/react-native-fs@2.41.0(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0))(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0)
       '@expo-google-fonts/poppins':
         specifier: ^0.4.1
         version: 0.4.1
@@ -689,6 +689,9 @@ packages:
     resolution: {integrity: sha512-NpugTzbKgGrNe45Ui32cN8vCFFMxVtP/9rtfwv0nP5FRDAjvYBxJcLVpYA9mr1jxP6cnIT7x9LUzuDTbWYYNRA==}
     engines: {node: '>=6.9.0'}
 
+  '@babel/runtime@8.0.8':
+    resolution: {integrity: sha512-dEu8nGlRqjsJsvviUUoSMfcRHpwomCiRlXsc2mPfJ79+ffTpDm+JtfUtTMzUrqCApHQnCsVPD3gT1ZT8RgBRCQ==}
+
   '@babel/template@7.29.7':
     resolution: {integrity: sha512-puq+Gf35oI24FeN11LkoUQFqv9uwNeWpxXZi/Ji3rRIoKAzKnxRaZ+Gkj0vKS9ZCiTESfng1N9LyOyXvo+m+Gg==}
     engines: {node: '>=6.9.0'}
@@ -704,8 +707,8 @@ packages:
   '@dimforge/rapier3d-compat@0.12.0':
     resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
 
-  '@dr.pogodin/js-utils@0.1.8':
-    resolution: {integrity: sha512-T9PSc/OgtmUWasX54VguGyqbgRu3LuGJzN4AKWfIKGyiCyPyoEPuUeMHVVDXWTr+SfnwoOi+mYWGZBpfR8qP+w==}
+  '@dr.pogodin/js-utils@0.2.0':
+    resolution: {integrity: sha512-pNzJkHeq5It6DGPwwTPtG6TRBuod1mI0XYORKbgOBKOY/RRCUv3d0j3Jcq6+IcaldstYcVRPdIRKYqPNAi+7ig==}
 
   '@dr.pogodin/react-native-fs@2.41.0':
     resolution: {integrity: sha512-85eU5N7bk9dWwm1DF14iPSbzdZvhidxOKoAzzE7kHsCVpQ2+f1JWGuJMPTc6z7SV2cZJzTbAyGzBvEJmXHvkIw==}
@@ -713,8 +716,8 @@ packages:
       react: '*'
       react-native: '*'
 
-  '@dr.pogodin/react-native-static-server@0.26.2':
-    resolution: {integrity: sha512-ddpBUAl6ELDUV5kodDi9V4Fm8ywMuUMcKPYDMmJthrBOF8y2EdJ8+z9mXk/+BHlg7/wQNfrI2c7rKBe1eGVOYQ==}
+  '@dr.pogodin/react-native-static-server@0.28.1':
+    resolution: {integrity: sha512-3Rcd/m3wzevfJh0DLLqJzhB2+KqXd5n7M4Qn72Gy0cskd2gKNe0PN8ptvFt+U1PSSDaZHql5vHqjGlnki80J3A==}
     peerDependencies:
       '@dr.pogodin/react-native-fs': '>= 2.22.0'
       react: '*'
@@ -4994,6 +4997,8 @@ snapshots:
 
   '@babel/runtime@7.29.10': {}
 
+  '@babel/runtime@8.0.8': {}
+
   '@babel/template@7.29.7':
     dependencies:
       '@babel/code-frame': 7.29.7
@@ -5019,9 +5024,9 @@ snapshots:
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
-  '@dr.pogodin/js-utils@0.1.8':
+  '@dr.pogodin/js-utils@0.2.0':
     dependencies:
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 8.0.8
 
   '@dr.pogodin/react-native-fs@2.41.0(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0)':
     dependencies:
@@ -5030,9 +5035,9 @@ snapshots:
       react: 19.2.0
       react-native: 0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1)
 
-  '@dr.pogodin/react-native-static-server@0.26.2(@dr.pogodin/react-native-fs@2.41.0(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0))(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0)':
+  '@dr.pogodin/react-native-static-server@0.28.1(@dr.pogodin/react-native-fs@2.41.0(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0))(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0)':
     dependencies:
-      '@dr.pogodin/js-utils': 0.1.8
+      '@dr.pogodin/js-utils': 0.2.0
       '@dr.pogodin/react-native-fs': 2.41.0(react-native@0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1))(react@19.2.0)
       react: 19.2.0
       react-native: 0.83.2(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.0)(supports-color@8.1.1)

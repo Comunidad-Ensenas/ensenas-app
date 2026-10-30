@@ -29,7 +29,7 @@
       "permissions": [
         "android.permission.CAMERA"
       ],
-      "package": "com.anonymous.ensenas",
+      "package": "com.anonymous.ensenas"
     },
     "web": {
       "bundler": "metro",
@@ -53,14 +53,6 @@
         {
           "android": {
             "usesCleartextTraffic": true
-          }
-        }
-      ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "newArchEnabled": false
           }
         }
       ]
