@@ -6,6 +6,7 @@ import { FormField } from '@/components/studio/FormField';
 import { SheetModal } from '@/components/studio/SheetModal';
 import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/lib/supabase';
+import { pruneAnimationFiles } from '@/lib/studioDelete';
 import { useStudioStore } from '@/store/useStudioStore';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
@@ -53,6 +54,7 @@ export default function StudioExportScreen() {
             setPhrases([]),
             setModules([])
           ]);
+          await pruneAnimationFiles();
           Alert.alert("Listo", "Almacenamiento local formateado.");
         }
       }

@@ -1,6 +1,5 @@
-import * as THREE from 'three';
-
 import { captureHandShape, medianHandShape, type HandShape } from '@/lib/handRetarget';
+import * as THREE from 'three';
 
 export interface Landmark {
   x: number;
@@ -82,6 +81,35 @@ function computeJointRotation(
   return q2.multiply(q1);
 }
 
+// Each sampler is queried with ascending times, so the cursor only moves forward.
+// Restarting the scan from 0 for every sample was O(n^2) per bone and froze the
+// JS thread when the recording stopped.
+function makeQuatSampler(times: number[], values: number[]) {
+  const q0 = new THREE.Quaternion();
+  const q1 = new THREE.Quaternion();
+  const out = new THREE.Quaternion();
+  const last = times.length - 1;
+  let cursor = 0;
+
+  return (t: number): THREE.Quaternion => {
+    if (t <= times[0]) return out.set(values[0], values[1], values[2], values[3]);
+    if (t >= times[last]) {
+      const idx = last * 4;
+      return out.set(values[idx], values[idx + 1], values[idx + 2], values[idx + 3]);
+    }
+
+    while (cursor < last - 1 && times[cursor + 1] < t) cursor++;
+
+    const anchor = cursor * 4;
+    const next = anchor + 4;
+    const ratio = (t - times[cursor]) / (times[cursor + 1] - times[cursor]);
+
+    q0.set(values[anchor], values[anchor + 1], values[anchor + 2], values[anchor + 3]);
+    q1.set(values[next], values[next + 1], values[next + 2], values[next + 3]);
+    return out.copy(q0).slerp(q1, ratio);
+  };
+}
+
 function smoothAndResampleTrack(
   boneRotations: BoneRotations,
   duration: number,
@@ -101,38 +129,17 @@ function smoothAndResampleTrack(
     const newTimes: number[] = [];
     const newVals: number[] = [];
 
-    const getQuatAt = (t: number): THREE.Quaternion => {
-      if (t <= oldTimes[0]) return new THREE.Quaternion(oldVals[0], oldVals[1], oldVals[2], oldVals[3]);
-      if (t >= oldTimes[oldTimes.length - 1]) {
-        const idx = oldVals.length - 4;
-        return new THREE.Quaternion(oldVals[idx], oldVals[idx + 1], oldVals[idx + 2], oldVals[idx + 3]);
-      }
-
-      let i = 0;
-      while (i < oldTimes.length - 1 && oldTimes[i + 1] < t) i++;
-
-      const t0 = oldTimes[i];
-      const t1 = oldTimes[i + 1];
-      const ratio = (t - t0) / (t1 - t0);
-
-      const q0 = new THREE.Quaternion(oldVals[i * 4], oldVals[i * 4 + 1], oldVals[i * 4 + 2], oldVals[i * 4 + 3]);
-      const q1 = new THREE.Quaternion(
-        oldVals[(i + 1) * 4],
-        oldVals[(i + 1) * 4 + 1],
-        oldVals[(i + 1) * 4 + 2],
-        oldVals[(i + 1) * 4 + 3]
-      );
-
-      return q0.slerp(q1, ratio);
-    };
+    const getQuatAt = makeQuatSampler(oldTimes, oldVals);
+    const getPrevQuatAt = makeQuatSampler(oldTimes, oldVals);
+    const getNextQuatAt = makeQuatSampler(oldTimes, oldVals);
 
     for (let i = 0; i <= totalFrames; i++) {
       const t = i * step;
       newTimes.push(Number(t.toFixed(3)));
 
       const qMid = getQuatAt(t);
-      const qPrev = getQuatAt(t - window);
-      const qNext = getQuatAt(t + window);
+      const qPrev = getPrevQuatAt(t - window);
+      const qNext = getNextQuatAt(t + window);
 
       const qAverage = qPrev.slerp(qNext, 0.5);
       qMid.slerp(qAverage, smoothFactor);
@@ -287,39 +294,11 @@ export function bakeAnimationLocal(
         palmNormal.negate();
       }
 
-      const handSize2D = Math.hypot(p9.x - p0.x, p9.y - p0.y);
-      const pinchThreshold2D = handSize2D * 0.75; 
-
-      [8, 12, 16, 20].forEach(tipIdx => {
-        const tTip = landmarks[4];
-        const fTip = landmarks[tipIdx];
-        
-        const dist2D = Math.hypot(fTip.x - tTip.x, fTip.y - tTip.y);
-
-        if (dist2D < pinchThreshold2D) {
-          const pull = Math.min(1.0, Math.max(0, (pinchThreshold2D - dist2D) / pinchThreshold2D + 0.35));
-          
-          const midX = (tTip.x + fTip.x) / 2;
-          const midY = (tTip.y + fTip.y) / 2;
-          const midZ = (tTip.z + fTip.z) / 2;
-
-          landmarks[4] = { x: tTip.x + (midX - tTip.x) * pull, y: tTip.y + (midY - tTip.y) * pull, z: tTip.z + (midZ - tTip.z) * pull };
-          landmarks[tipIdx] = { x: fTip.x + (midX - fTip.x) * pull, y: fTip.y + (midY - fTip.y) * pull, z: fTip.z + (midZ - fTip.z) * pull };
-
-          const tInter = landmarks[3];
-          const fInter = landmarks[tipIdx - 1];
-          const interMidZ = (tInter.z + fInter.z) / 2;
-          const pullInter = pull * 0.5;
-          
-          landmarks[3] = { ...tInter, z: tInter.z + (interMidZ - tInter.z) * pullInter };
-          landmarks[tipIdx - 1] = { ...fInter, z: fInter.z + (interMidZ - fInter.z) * pullInter };
-        }
-      });
-
       const qWristWorld = computeJointRotation(vDir, palmNormal, baseDir, baseNorm);
       const qWristLocal = qAbsLower.clone().invert().multiply(qWristWorld);
       saveRawQuat(`${prefix}Wrist`, qWristLocal, time);
 
+      // Captura de las proporciones exactas de la mano limpia sin alteraciones
       handShapeSamples[prefix].push(captureHandShape(landmarks));
 
       const getCustomNormal = (dirIdx: number, sideIdx1: number, sideIdx2: number) => {

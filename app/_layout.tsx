@@ -1,4 +1,3 @@
-import { CameraServerProvider } from '@/context/CameraServerContext';
 import { AppThemeProvider } from '@/context/ThemeProvider';
 import { db } from '@/db';
 import { profile } from '@/db/schema';
@@ -29,15 +28,30 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync();
 
+// expo-gl cannot provide these WebGL features and @react-three/fiber still uses the deprecated
+// THREE.Clock, so every canvas logs warnings the app cannot act on. Keep them out of the dev console.
+if (__DEV__) {
+  const ignoredLogs = [
+    'EXGL: gl.pixelStorei()',
+    'THREE.Clock: This module has been deprecated',
+    'THREE.WebGLRenderer: WEBGL_lose_context extension not supported',
+  ];
+  for (const level of ['log', 'warn'] as const) {
+    const original = console[level];
+    console[level] = (first: unknown, ...rest: unknown[]) => {
+      if (typeof first === 'string' && ignoredLogs.some((ignored) => first.includes(ignored))) return;
+      original(first, ...rest);
+    };
+  }
+}
+
 function RootLayoutNav() {
   const { isDark } = useTheme();
 
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(app)" />
-        <Stack.Screen name="(studio)" />
-      </Stack>
+      {/* Screens are auto-discovered: naming the inactive group here warns in the other app mode. */}
+      <Stack screenOptions={{ headerShown: false }} />
     </ThemeProvider>
   );
 }
@@ -107,10 +121,8 @@ export default function RootLayout() {
   }
 
   return (
-    <CameraServerProvider>
-      <AppThemeProvider>
-        <RootLayoutNav />
-      </AppThemeProvider>
-    </CameraServerProvider>
+    <AppThemeProvider>
+      <RootLayoutNav />
+    </AppThemeProvider>
   );
 }

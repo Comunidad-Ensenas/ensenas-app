@@ -11,7 +11,7 @@ import { useStudioStore } from '@/store/useStudioStore';
 import { useIsFocused } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { Camera, Check, DragHandGesture, Refresh, Settings } from 'iconoir-react-native';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraPermission } from 'react-native-vision-camera';
@@ -26,14 +26,14 @@ export default function StudioConfigScreen() {
   const { serverUrl } = useCameraServer();
   const { configs, setConfigs } = useStudioStore();
 
-  const [landmarksData, setLandmarksData] = useState<any[]>([]);
+  const landmarksRef = useRef<any[]>([]);
+  const [isDetected, setIsDetected] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [manualConfigName, setManualConfigName] = useState('');
   const [learningTips, setLearningTips] = useState<string[]>([]);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
 
   const isFormValid = manualConfigName.trim().length > 0;
-  const isDetected = landmarksData.length > 0;
   const isReadyToCapture = isFormValid && isDetected;
 
   useEffect(() => {
@@ -44,14 +44,16 @@ export default function StudioConfigScreen() {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.error) return;
-      setLandmarksData(data);
+      landmarksRef.current = data;
+      // Only the detected flag drives the UI; re-setting true is a no-op re-render.
+      setIsDetected(true);
     } catch (e) { }
   };
 
   const handleSaveConfig = async () => {
     if (!isReadyToCapture) return;
 
-    const capturedLandmarks = landmarksData[0];
+    const capturedLandmarks = landmarksRef.current[0];
     const dummyFrames = [
       { timestamp: 0, pose3D: null, pose2D: null, leftHand: null, rightHand: capturedLandmarks },
       { timestamp: 100, pose3D: null, pose2D: null, leftHand: null, rightHand: capturedLandmarks }
@@ -164,7 +166,8 @@ export default function StudioConfigScreen() {
           style={[styles.settingsButton, { backgroundColor: colors.surface, borderColor: colors.border }]} 
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setLandmarksData([]);
+            landmarksRef.current = [];
+            setIsDetected(false);
             setFacingMode((prev) => prev === 'user' ? 'environment' : 'user');
           }}
           accessibilityRole="button"

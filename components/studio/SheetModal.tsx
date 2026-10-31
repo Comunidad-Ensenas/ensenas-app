@@ -42,6 +42,9 @@ export function SheetModal({
 
   const maxSheetHeight = Math.max(windowHeight - keyboardHeight - insets.top - 24, 240);
 
+  // Heavy sheet bodies (forms, long lists) should not exist until the sheet opens.
+  if (!visible) return null;
+
   return (
     <Modal visible={visible} transparent animationType={animationType} onRequestClose={onClose}>
       <View style={styles.overlay} accessibilityViewIsModal>

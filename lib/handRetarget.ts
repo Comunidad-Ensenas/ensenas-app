@@ -1,14 +1,12 @@
 import * as THREE from 'three';
 
 /**
- * Hand geometry captured from a signer, expressed in palm-length units relative
- * to the wrist and the anatomical basis (finger direction, palm normal, thumb side).
- * It is the same for every frame, so the avatar can be reshaped once per clip.
+- Hand geometry captured from a signer, expressed in palm-length units relative
+- to the wrist and the anatomical basis (finger direction, palm normal, thumb side).
+- It is the same for every frame, so the avatar can be reshaped once per clip.
  */
 export interface HandShape {
-  /** MCP offsets for thumb, index, middle, ring and little, as [e1, e2, e3]. */
   mcps: [number, number, number][];
-  /** Segment lengths for thumb, index, middle, ring and little: [1->2, 2->3, 3->4]. */
   segments: [number, number, number][];
 }
 
@@ -24,7 +22,6 @@ const FINGER_NAMES = ['Thumb', 'Index', 'Middle', 'Ring', 'Little'];
 
 const round = (n: number) => Number(n.toFixed(4));
 
-/** The baker encodes depth as +z toward the viewer, so the raw z is negated. */
 const toVec = (p: { x: number; y: number; z: number }) => new THREE.Vector3(p.x, p.y, -p.z);
 
 function buildBasis(wrist: THREE.Vector3, middleMcp: THREE.Vector3, indexMcp: THREE.Vector3, littleMcp: THREE.Vector3) {
@@ -68,20 +65,12 @@ const FINGER_VRM_BONES: Record<string, string[]> = {
 interface FingerSetup {
   names: string[];
   bones: THREE.Object3D[];
-  /** Direction of each bone's child at rest, in the normalized bone's local frame. */
   dirs: THREE.Vector3[];
 }
 
 const fingerSetups = new WeakMap<object, Record<'left' | 'right', FingerSetup[]>>();
 const handRestQuatInv = new WeakMap<object, Record<'left' | 'right', THREE.Quaternion>>();
-const handCorrections = new WeakMap<object, Record<'left' | 'right', THREE.Quaternion>>();
 
-/**
- * Cache the avatar's rest finger directions before the rig is posed. The baker
- * emits rotations assuming every phalanx rests along the arm axis, which is not
- * true for the thumb (and for avatars with a non T-pose hand), so the player
- * needs the real directions to place the baked directions back on the avatar.
- */
 export function prepareFingerRotations(humanoid: any): void {
   if (!humanoid || fingerSetups.has(humanoid)) return;
 
@@ -97,10 +86,6 @@ export function prepareFingerRotations(humanoid: any): void {
     left: new THREE.Quaternion(),
     right: new THREE.Quaternion(),
   };
-  const corrections: Record<'left' | 'right', THREE.Quaternion> = {
-    left: new THREE.Quaternion(),
-    right: new THREE.Quaternion(),
-  };
 
   (['left', 'right'] as const).forEach((side) => {
     const rawHand = humanoid.getRawBoneNode(`${side}Hand`) as THREE.Object3D | null;
@@ -109,25 +94,6 @@ export function prepareFingerRotations(humanoid: any): void {
       rawHand.getWorldQuaternion(handRig);
       handRig.premultiply(rootQuat).invert();
       restInv[side].copy(handRig);
-    }
-
-    const nodePosition = (name: string): THREE.Vector3 | null => {
-      const node = humanoid.getNormalizedBoneNode(`${side}${name}`) as THREE.Object3D | null;
-      return node ? node.position : null;
-    };
-    const middleMcp = nodePosition('MiddleProximal');
-    const indexMcp = nodePosition('IndexProximal');
-    const littleMcp = nodePosition('LittleProximal');
-    if (middleMcp && indexMcp && littleMcp) {
-      // The baker assumes a canonical hand (left along +X, right along -X, palm
-      // normal -Y). Rotate the avatar's rest anatomical frame onto that frame so
-      // its hand and baked palm offsets land on the source's side.
-      const { e1, e2, e3 } = buildBasis(new THREE.Vector3(), middleMcp, indexMcp, littleMcp);
-      const baseDir = new THREE.Vector3(side === 'left' ? 1 : -1, 0, 0);
-      const baseNorm = new THREE.Vector3(0, -1, 0);
-      const avatarFrame = new THREE.Matrix4().makeBasis(e1, e2, e3);
-      const canonicalFrame = new THREE.Matrix4().makeBasis(baseDir, new THREE.Vector3(0, 1, 0), baseDir.clone().cross(baseNorm));
-      corrections[side].setFromRotationMatrix(canonicalFrame.multiply(avatarFrame.invert()));
     }
 
     FINGER_NAMES.forEach((finger) => {
@@ -162,14 +128,23 @@ export function prepareFingerRotations(humanoid: any): void {
 
   fingerSetups.set(humanoid, setups);
   handRestQuatInv.set(humanoid, restInv);
-  handCorrections.set(humanoid, corrections);
 }
 
-/**
- * Re-solve a hand's finger rotations so each baked joint direction lands on the
- * avatar's real phalanx. Call after the mixer wrote the clip and before
- * `vrm.update`, once per frame.
- */
+// Runs for every hand on every rendered frame, so it reuses module scratch objects
+// instead of allocating ~100 objects per call for the Hermes GC to collect.
+const scratch = {
+  handWorld: new THREE.Quaternion(),
+  absolute: new THREE.Quaternion(),
+  world: new THREE.Quaternion(),
+  inverse: new THREE.Quaternion(),
+  solved: new THREE.Quaternion(),
+  bakedDir: new THREE.Vector3(),
+  localDir: new THREE.Vector3(),
+  baseDir: new THREE.Vector3(),
+  baked: [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()],
+  targets: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()],
+};
+
 export function solveFingerRotations(
   humanoid: any,
   side: 'left' | 'right',
@@ -182,39 +157,45 @@ export function solveFingerRotations(
   if (!hand) return;
   if (!hasTrack(`${side}Hand`)) return;
 
-  const bakedHandWorld = hand.getWorldQuaternion(new THREE.Quaternion());
-  const baseDir = new THREE.Vector3(side === 'left' ? 1 : -1, 0, 0);
+  hand.getWorldQuaternion(scratch.handWorld);
+  scratch.baseDir.set(side === 'left' ? 1 : -1, 0, 0);
 
-  const fingers = setups[side].flatMap((setup) => {
-    if (!setup.names.every((name) => hasTrack(name))) return [];
+  for (const setup of setups[side]) {
+    let tracked = true;
+    for (const name of setup.names) {
+      if (!hasTrack(name)) {
+        tracked = false;
+        break;
+      }
+    }
+    if (!tracked) continue;
 
-    const baked = setup.bones.map((bone) => bone.quaternion.clone());
-    const absolute = bakedHandWorld.clone();
-    const targets = baked.map((quat) => {
-      absolute.multiply(quat);
-      return baseDir.clone().applyQuaternion(absolute);
-    });
-    return [{ setup, baked, targets }];
-  });
+    // Baked rotations and the direction each bone should point at.
+    scratch.absolute.copy(scratch.handWorld);
+    for (let i = 0; i < setup.bones.length; i++) {
+      const baked = scratch.baked[i].copy(setup.bones[i].quaternion);
+      scratch.absolute.multiply(baked);
+      scratch.targets[i].copy(scratch.baseDir).applyQuaternion(scratch.absolute);
+    }
 
-  if (fingers.length === 0) return;
+    scratch.world.copy(scratch.handWorld);
+    for (let i = 0; i < setup.bones.length; i++) {
+      const baked = scratch.baked[i];
+      scratch.bakedDir.copy(setup.dirs[i]).applyQuaternion(baked);
+      scratch.localDir
+        .copy(scratch.targets[i])
+        .applyQuaternion(scratch.inverse.copy(scratch.world).invert())
+        .normalize();
 
-  const correction = handCorrections.get(humanoid)?.[side];
-  const handWorld = bakedHandWorld.clone();
-  if (correction) {
-    hand.quaternion.multiply(correction);
-    handWorld.multiply(correction);
-  }
+      const solved = scratch.solved.copy(baked);
+      // A bone flipped 180 degrees has no unique axis, so keep the baked rotation.
+      if (scratch.bakedDir.dot(scratch.localDir) > -0.999) {
+        solved.setFromUnitVectors(scratch.bakedDir, scratch.localDir).multiply(baked);
+      }
 
-  for (const { setup, baked, targets } of fingers) {
-    let world = handWorld.clone();
-    setup.bones.forEach((bone, i) => {
-      const bakedDir = setup.dirs[i].clone().applyQuaternion(baked[i]);
-      const localDir = targets[i].clone().applyQuaternion(world.clone().invert()).normalize();
-      const solved = new THREE.Quaternion().setFromUnitVectors(bakedDir, localDir).multiply(baked[i]);
-      bone.quaternion.copy(solved);
-      world.multiply(solved);
-    });
+      setup.bones[i].quaternion.copy(solved);
+      scratch.world.multiply(solved);
+    }
   }
 }
 
@@ -230,11 +211,6 @@ function tipOf(node: THREE.Object3D | null | undefined): THREE.Object3D | null {
   return node.children[0];
 }
 
-/**
- * Reshape a VRM hand so its palm and finger proportions match the signer's.
- * The baked rotations then place the joints where the signer's joints were,
- * which keeps touching fingers touching on every frame.
- */
 export function applyHandShape(humanoid: any, side: 'left' | 'right', shape: HandShape): void {
   if (!humanoid || !shape) return;
 
@@ -294,7 +270,6 @@ export function applyHandShape(humanoid: any, side: 'left' | 'right', shape: Han
 
   for (const finger of fingers) {
     if (!finger) continue;
-    // Restore the signer-independent geometry before touching anything.
     finger.bones.forEach((bone) => bone.position.copy(store!.get(bone)!));
     finger.children.forEach((child) => {
       if (child) child.position.copy(store!.get(child)!);

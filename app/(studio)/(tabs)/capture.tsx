@@ -22,6 +22,7 @@ import { useCameraPermission } from 'react-native-vision-camera';
 import { WebView } from 'react-native-webview';
 
 const ANIMATIONS_DIRECTORY = `${FileSystem.documentDirectory}ensenas/animations/`;
+const MAX_RECORDING_MS = 30_000;
 
 type AnimationData = {
   duration: number;
@@ -98,6 +99,8 @@ export default function StudioCaptureScreen() {
 
   const countdownTimerRef = useRef<any>(null);
   const framesBuffer = useRef<any[]>([]);
+  const stopRequestedRef = useRef(false);
+  const stopRecordingRef = useRef<() => void>(() => {});
 
   const isFormValid = meaningsList.length > 0 && selectedDominantConfig !== null;
 
@@ -172,24 +175,34 @@ export default function StudioCaptureScreen() {
   }, [signId, localSignsRaw, availableConfigs]);
 
   const onMessage = useCallback((event: any) => {
+    const raw = event.nativeEvent.data as string;
+
+    // MediaPipe posts ~15 frames per second. Only pay for JSON.parse while recording.
+    if (!isRecording) {
+      if (!isReady && raw.includes('"READY"')) setIsReady(true);
+      return;
+    }
+
     try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.status === 'READY') {
-        setIsReady(true);
+      const data = JSON.parse(raw);
+      if (data.error) return;
+
+      const firstFrameTime = framesBuffer.current[0]?.timestamp;
+      if (!stopRequestedRef.current && firstFrameTime && data.timestamp - firstFrameTime >= MAX_RECORDING_MS) {
+        stopRequestedRef.current = true;
+        stopRecordingRef.current();
         return;
       }
-      if (data.error) return;
-      if (isRecording) {
-        framesBuffer.current.push({
-          timestamp: data.timestamp,
-          pose3D: data.pose3D || null,
-          pose2D: data.pose2D || null,
-          leftHand: data.leftHand || null,
-          rightHand: data.rightHand || null,
-        });
-      }
+
+      framesBuffer.current.push({
+        timestamp: data.timestamp,
+        pose3D: data.pose3D || null,
+        pose2D: data.pose2D || null,
+        leftHand: data.leftHand || null,
+        rightHand: data.rightHand || null,
+      });
     } catch (error) {}
-  }, [isRecording]);
+  }, [isRecording, isReady]);
 
   const saveEditedMetadataOnly = async () => {
     if (!selectedDominantConfig || meaningsList.length === 0) return;
@@ -231,6 +244,7 @@ export default function StudioCaptureScreen() {
             clearInterval(countdownTimerRef.current);
             countdownTimerRef.current = null;
             framesBuffer.current = [];
+            stopRequestedRef.current = false;
             setIsRecording(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             return null;
@@ -243,6 +257,7 @@ export default function StudioCaptureScreen() {
     }
 
     setIsRecording(false);
+    stopRequestedRef.current = false;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
     const capturedFrames = framesBuffer.current.length;
     if (capturedFrames <= 5) return;
@@ -291,6 +306,11 @@ export default function StudioCaptureScreen() {
       Alert.alert('Error', 'No se pudo generar la animación localmente.');
     }
   };
+
+  // The bridge callback needs the latest toggleRecording without re-subscribing every render.
+  useEffect(() => {
+    stopRecordingRef.current = toggleRecording;
+  });
 
   const openConfigSelector = (hand: 'dominant' | 'recessive') => {
     setSelectingHand(hand);
