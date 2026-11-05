@@ -15,6 +15,7 @@ interface UserData {
   learningMotivation: string | null;
   experienceLevel: string | null;
   avatarSkinTone: string | null;
+  avatarSeed: string | null;
   hapticFeedback: boolean;
   reminderTime: string | null;
   birthdate: string | null;
@@ -59,6 +60,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           learningMotivation: user.learningMotivation,
           experienceLevel: user.experienceLevel,
           avatarSkinTone: user.avatarSkinTone,
+          avatarSeed: user.avatarSeed,
           hapticFeedback: user.hapticFeedback ?? true,
           reminderTime: user.reminderTime,
           birthdate: user.birthdate,

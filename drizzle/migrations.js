@@ -2,11 +2,13 @@
 
 import journal from './meta/_journal.json';
 import m0000 from './0000_groovy_proteus.sql';
+import m0001 from './0001_neat_sharon_carter.sql';
 
   export default {
     journal,
     migrations: {
-      m0000
+      m0000,
+      m0001
     }
   }
   

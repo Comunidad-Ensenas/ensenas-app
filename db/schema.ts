@@ -13,6 +13,7 @@ export const profile = sqliteTable('profile', {
   learningMotivation: text('learning_motivation'),
   experienceLevel: text('experience_level'),
   avatarSkinTone: text('avatar_skin_tone'),
+  avatarSeed: text('avatar_seed'),
   hapticFeedback: integer('haptic_feedback', { mode: 'boolean' }).default(true),
   reminderTime: text('reminder_time'),
   birthdate: text('birthdate'),
@@ -40,6 +41,7 @@ export const signModules = sqliteTable('sign_modules', {
   localId: text('local_id').primaryKey(),
   title: text('title').notNull(),
   description: text('description'),
+  iconName: text('icon_name').notNull().default('BookStack'),
   difficultyLevel: integer('difficulty_level').default(1),
   orderIndex: integer('order_index'),
 });
