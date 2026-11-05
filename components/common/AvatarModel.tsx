@@ -63,10 +63,19 @@ const BONE_TO_VRM: Record<string, string> = {
 
 async function loadNativeTexture(moduleId: number): Promise<THREE.Texture> {
   const asset = Asset.fromModule(moduleId);
+
+  // Release builds resolve a bundled image to its Android drawable resource name and
+  // expo-asset marks it as already downloaded, but expo-gl only decodes file:// paths
+  // (see loadImage in expo-gl/common/EXGLImageUtils.cpp). Clearing the flag makes
+  // downloadAsync copy the drawable to the cache and return a real file:// path.
+  if (!asset.localUri?.startsWith('file://')) {
+    asset.downloaded = false;
+  }
+
   await asset.downloadAsync();
   const localUri = asset.localUri ?? asset.uri;
 
-  if (!localUri) throw new Error('');
+  if (!localUri) throw new Error('Asset de textura sin URI local');
 
   let width = asset.width ?? 0;
   let height = asset.height ?? 0;
@@ -116,11 +125,7 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
     let loadedTexture: THREE.Texture | null = null;
 
     async function loadAvatar() {
-<<<<<<< HEAD
-      const vrmModelName = 'bizdude';
-=======
-      const vrmModelName = "crimsom";
->>>>>>> main
+      const vrmModelName = "egg";
 
       try {
         const vrmAsset = Asset.fromModule(require(`../../assets/3d/${vrmModelName}/avatar_debug.vrm`));
@@ -192,6 +197,7 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
         setVrm(loadedVrm);
       } catch (error) {
         if (loadedTexture) loadedTexture.dispose();
+        console.warn('No se pudo cargar el avatar 3D:', error);
       }
     }
 
