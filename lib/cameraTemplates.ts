@@ -22,7 +22,7 @@ export const getConfigHtml = (facingMode: 'user' | 'environment') => {
       <video id="video" autoplay playsinline muted></video>
       <canvas id="canvas"></canvas>
       <script type="module">
-        import { HandLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
+        import { HandLandmarker, FilesetResolver, DrawingUtils } from "./vision_bundle.js";
         const video = document.getElementById("video");
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
@@ -35,10 +35,10 @@ export const getConfigHtml = (facingMode: 'user' | 'environment') => {
 
         async function init() {
           try {
-            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
+            const vision = await FilesetResolver.forVisionTasks("./");
             handLandmarker = await HandLandmarker.createFromOptions(vision, {
               baseOptions: {
-                modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+                modelAssetPath: "./hand.task",
                 delegate: "GPU"
               },
               runningMode: "VIDEO",
