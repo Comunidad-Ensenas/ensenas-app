@@ -5,7 +5,7 @@ import { Typography } from '@/components/common/Typography';
 import { FormField } from '@/components/studio/FormField';
 import { SheetModal } from '@/components/studio/SheetModal';
 import { useTheme } from '@/hooks/useTheme';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { pruneAnimationFiles } from '@/lib/studioDelete';
 import { useStudioStore } from '@/store/useStudioStore';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -189,6 +189,14 @@ export default function StudioExportScreen() {
   };
 
   const checkAuthAndExport = async () => {
+    if (!isSupabaseConfigured) {
+      Alert.alert(
+        "Exportación no configurada",
+        "Este build no tiene EXPO_PUBLIC_SUPABASE_URL ni EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Revisa las variables del entorno en EAS y vuelve a compilar."
+      );
+      return;
+    }
+
     if (configs.length === 0 && signs.length === 0 && phrases.length === 0 && modules.length === 0) {
       Alert.alert("Nada que exportar", "No hay datos locales guardados en el Studio.");
       return;
