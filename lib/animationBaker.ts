@@ -62,23 +62,55 @@ function mirrorArray(arr: Landmark[] | null | undefined): Landmark[] | null | un
   return arr ? arr.map(mirrorPoint as any) : arr;
 }
 
+// Signed roll per joint. A weak projection holds the previous angle instead of
+// snapping to a random direction, which is what the thumb does when abducted.
+const rollMemory = new Map<string, number>();
+
 function computeJointRotation(
   dir: THREE.Vector3,
-  normal: THREE.Vector3,
+  normal: THREE.Vector3 | null,
   baseDir: THREE.Vector3,
-  baseNormal: THREE.Vector3
+  baseNormal: THREE.Vector3,
+  key?: string
 ): THREE.Quaternion {
   const q1 = new THREE.Quaternion().setFromUnitVectors(baseDir, dir);
+
+  // No usable normal for this joint: keep the minimal twist. The thumb is the case,
+  // its lateral axis is nearly parallel to its own direction, and any palm-based
+  // reference twists it away from the rest pose.
+  if (!normal) return q1;
+
   const expectedNormal = baseNormal.clone().applyQuaternion(q1);
 
-  const nProj = normal.clone().projectOnPlane(dir).normalize();
-  const eProj = expectedNormal.clone().projectOnPlane(dir).normalize();
+  const nProj = normal.clone().projectOnPlane(dir);
+  const eProj = expectedNormal.clone().projectOnPlane(dir);
+  const nLenSq = nProj.lengthSq();
+  const eLenSq = eProj.lengthSq();
+  const prevAngle = key ? rollMemory.get(key) ?? 0 : 0;
 
-  const q2 = new THREE.Quaternion();
-  if (nProj.lengthSq() > 0.0001 && eProj.lengthSq() > 0.0001) {
-    q2.setFromUnitVectors(eProj, nProj);
+  // Checked before normalize: normalize() maps a noisy near-zero vector to a
+  // random unit vector, so the old lengthSq guard almost never fired.
+  if (nLenSq < 1e-6 || eLenSq < 1e-6) {
+    return new THREE.Quaternion().setFromAxisAngle(dir, prevAngle).multiply(q1);
   }
-  return q2.multiply(q1);
+
+  nProj.normalize();
+  eProj.normalize();
+
+  // Roll as a signed angle around dir. setFromUnitVectors(eProj, nProj) picks an
+  // arbitrary axis near 180 degrees, which whipped the bone on the wrong axis.
+  let angle = Math.atan2(new THREE.Vector3().crossVectors(eProj, nProj).dot(dir), eProj.dot(nProj));
+
+  if (key) {
+    while (angle - prevAngle > Math.PI) angle -= 2 * Math.PI;
+    while (angle - prevAngle < -Math.PI) angle += 2 * Math.PI;
+  }
+
+  const confidence = THREE.MathUtils.smoothstep(Math.min(nLenSq, eLenSq), 0.01, 0.1);
+  angle = prevAngle + (angle - prevAngle) * confidence;
+  if (key) rollMemory.set(key, angle);
+
+  return new THREE.Quaternion().setFromAxisAngle(dir, angle).multiply(q1);
 }
 
 // Each sampler is queried with ascending times, so the cursor only moves forward.
@@ -163,6 +195,7 @@ export function bakeAnimationLocal(
   if (!frames || frames.length === 0) {
     throw new Error('No frames provided for baking.');
   }
+  rollMemory.clear();
 
   const firstTime = frames[0].timestamp;
   const lastTime = frames[frames.length - 1].timestamp;
@@ -315,28 +348,25 @@ export function bakeAnimationLocal(
       };
 
       const globalPalmNorm = getCustomNormal(9, 5, 17);
-      
-      const thumbSideVec = prefix === 'right' ? vSide.clone() : vSide.clone().negate();
-      const thumbNormal = new THREE.Vector3().lerpVectors(globalPalmNorm, thumbSideVec, 0.6).normalize();
 
-      const solve3DFinger = (name: string, idxs: number[], customNorm: THREE.Vector3) => {
+      const solve3DFinger = (name: string, idxs: number[], customNorm: THREE.Vector3 | null) => {
         const vProx = getVector(landmarks[idxs[0]], landmarks[idxs[1]]);
-        const qProxWorld = computeJointRotation(vProx, customNorm, baseDir, baseNorm);
+        const qProxWorld = computeJointRotation(vProx, customNorm, baseDir, baseNorm, `${prefix}${name}P`);
         const qProxLocal = qWristWorld.clone().invert().multiply(qProxWorld);
         saveRawQuat(`${prefix}${name}Proximal`, qProxLocal, time);
 
         const vInter = getVector(landmarks[idxs[1]], landmarks[idxs[2]]);
-        const qInterWorld = computeJointRotation(vInter, customNorm, baseDir, baseNorm);
+        const qInterWorld = computeJointRotation(vInter, customNorm, baseDir, baseNorm, `${prefix}${name}I`);
         const qInterLocal = qProxWorld.clone().invert().multiply(qInterWorld);
         saveRawQuat(`${prefix}${name}Intermediate`, qInterLocal, time);
 
         const vDist = getVector(landmarks[idxs[2]], landmarks[idxs[3]]);
-        const qDistWorld = computeJointRotation(vDist, customNorm, baseDir, baseNorm);
+        const qDistWorld = computeJointRotation(vDist, customNorm, baseDir, baseNorm, `${prefix}${name}D`);
         const qDistLocal = qInterWorld.clone().invert().multiply(qDistWorld);
         saveRawQuat(`${prefix}${name}Distal`, qDistLocal, time);
       };
 
-      solve3DFinger('Thumb', [1, 2, 3, 4], thumbNormal);
+      solve3DFinger('Thumb', [1, 2, 3, 4], null);
       solve3DFinger('Index', [5, 6, 7, 8], getCustomNormal(5, 5, 9));
       solve3DFinger('Middle', [9, 10, 11, 12], globalPalmNorm);
       solve3DFinger('Ring', [13, 14, 15, 16], getCustomNormal(13, 9, 17));
@@ -353,6 +383,21 @@ export function bakeAnimationLocal(
       processHand(avRightHand, 'right', qAbsRightLower);
     }
   });
+
+  // Same hemisphere on every track so the smoothing average and any linear consumer
+  // take the short path instead of spinning through the long one.
+  for (const boneName in boneRotations) {
+    const v = boneRotations[boneName].values;
+    for (let i = 4; i < v.length; i += 4) {
+      const dot = v[i] * v[i - 4] + v[i + 1] * v[i - 3] + v[i + 2] * v[i - 2] + v[i + 3] * v[i - 1];
+      if (dot < 0) {
+        v[i] = -v[i];
+        v[i + 1] = -v[i + 1];
+        v[i + 2] = -v[i + 2];
+        v[i + 3] = -v[i + 3];
+      }
+    }
+  }
 
   const smoothedBoneRotations = smoothAndResampleTrack(boneRotations, duration, 30);
 

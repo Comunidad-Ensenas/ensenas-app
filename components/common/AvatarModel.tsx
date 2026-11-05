@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber/native';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image } from 'react-native';
 
 import { VRMLoaderPlugin } from '@pixiv/three-vrm';
@@ -10,7 +10,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 import type { AnimationData } from './SignPlayer';
 
-import { applyHandShape, prepareFingerRotations, resetHandShape, solveFingerRotations } from '@/lib/handRetarget';
+import { applyHandShape, prepareHandRest, resetHandShape } from '@/lib/handRetarget';
 
 type AvatarModelProps = {
   animData?: AnimationData | null;
@@ -111,15 +111,6 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
   const leftLowerArmFlexQuat = useRef(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -2.0));
   const leftHandFixQuat = useRef(new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.5, 0, -1.0)));
 
-  const trackedBones = useMemo(() => {
-    const set = new Set<string>();
-    for (const track of animData?.tracks ?? []) {
-      const sourceBone = track.name.replace('.quaternion', '');
-      set.add(BONE_TO_VRM[sourceBone] || sourceBone);
-    }
-    return set;
-  }, [animData]);
-
   useEffect(() => {
     let cancelled = false;
     let loadedTexture: THREE.Texture | null = null;
@@ -146,7 +137,7 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
         const loadedVrm = gltf.userData.vrm;
         if (!loadedVrm) throw new Error('');
 
-        prepareFingerRotations(loadedVrm.humanoid);
+        prepareHandRest(loadedVrm.humanoid);
 
         loadedVrm.scene.rotation.y = Math.PI;
 
@@ -300,12 +291,6 @@ export default function AvatarModel({ animData, position = [0, 0, 0], scale = 1,
       if (lHand) {
         lHand.quaternion.copy(leftHandFixQuat.current);
       }
-    }
-
-    if (vrm.humanoid) {
-      const hasTrack = (name: string) => trackedBones.has(name);
-      solveFingerRotations(vrm.humanoid, 'left', hasTrack);
-      solveFingerRotations(vrm.humanoid, 'right', hasTrack);
     }
 
     vrm.update(delta);

@@ -54,25 +54,11 @@ export function captureHandShape(points: { x: number; y: number; z: number }[]):
   return { mcps, segments };
 }
 
-const FINGER_VRM_BONES: Record<string, string[]> = {
-  Thumb: ['ThumbMetacarpal', 'ThumbProximal', 'ThumbDistal'],
-  Index: ['IndexProximal', 'IndexIntermediate', 'IndexDistal'],
-  Middle: ['MiddleProximal', 'MiddleIntermediate', 'MiddleDistal'],
-  Ring: ['RingProximal', 'RingIntermediate', 'RingDistal'],
-  Little: ['LittleProximal', 'LittleIntermediate', 'LittleDistal'],
-};
-
-interface FingerSetup {
-  names: string[];
-  bones: THREE.Object3D[];
-  dirs: THREE.Vector3[];
-}
-
-const fingerSetups = new WeakMap<object, Record<'left' | 'right', FingerSetup[]>>();
 const handRestQuatInv = new WeakMap<object, Record<'left' | 'right', THREE.Quaternion>>();
 
-export function prepareFingerRotations(humanoid: any): void {
-  if (!humanoid || fingerSetups.has(humanoid)) return;
+// Captures the hand rest frame while the model is still in T-pose, before the mixer poses it.
+export function prepareHandRest(humanoid: any): void {
+  if (!humanoid || handRestQuatInv.has(humanoid)) return;
 
   const root = humanoid.normalizedHumanBonesRoot;
   const rootQuat = new THREE.Quaternion();
@@ -81,7 +67,6 @@ export function prepareFingerRotations(humanoid: any): void {
     root.getWorldQuaternion(rootQuat).invert();
   }
 
-  const setups: Record<'left' | 'right', FingerSetup[]> = { left: [], right: [] };
   const restInv: Record<'left' | 'right', THREE.Quaternion> = {
     left: new THREE.Quaternion(),
     right: new THREE.Quaternion(),
@@ -90,113 +75,11 @@ export function prepareFingerRotations(humanoid: any): void {
   (['left', 'right'] as const).forEach((side) => {
     const rawHand = humanoid.getRawBoneNode(`${side}Hand`) as THREE.Object3D | null;
     if (rawHand && root) {
-      const handRig = new THREE.Quaternion();
-      rawHand.getWorldQuaternion(handRig);
-      handRig.premultiply(rootQuat).invert();
-      restInv[side].copy(handRig);
+      rawHand.getWorldQuaternion(restInv[side]).premultiply(rootQuat).invert();
     }
-
-    FINGER_NAMES.forEach((finger) => {
-      const names = FINGER_VRM_BONES[finger].map((name) => `${side}${name}`);
-      const bones = names.map((name) => {
-        try {
-          return humanoid.getNormalizedBoneNode(name) as THREE.Object3D | null;
-        } catch {
-          return null;
-        }
-      });
-      if (bones.some((bone) => !bone)) return;
-
-      const dirs = bones.slice(0, 2).map((_, i) => (bones[i + 1] as THREE.Object3D).position.clone().normalize());
-
-      const rawDistal = humanoid.getRawBoneNode(names[2]) as THREE.Object3D | null;
-      const tip = rawDistal && rawDistal.children.length ? rawDistal.children[0] : null;
-      if (rawDistal && tip) {
-        const direction = tip
-          .getWorldPosition(new THREE.Vector3())
-          .sub(rawDistal.getWorldPosition(new THREE.Vector3()))
-          .applyQuaternion(rootQuat)
-          .normalize();
-        dirs.push(direction);
-      } else {
-        dirs.push(new THREE.Vector3(1, 0, 0));
-      }
-
-      setups[side].push({ names, bones: bones as THREE.Object3D[], dirs });
-    });
   });
 
-  fingerSetups.set(humanoid, setups);
   handRestQuatInv.set(humanoid, restInv);
-}
-
-// Runs for every hand on every rendered frame, so it reuses module scratch objects
-// instead of allocating ~100 objects per call for the Hermes GC to collect.
-const scratch = {
-  handWorld: new THREE.Quaternion(),
-  absolute: new THREE.Quaternion(),
-  world: new THREE.Quaternion(),
-  inverse: new THREE.Quaternion(),
-  solved: new THREE.Quaternion(),
-  bakedDir: new THREE.Vector3(),
-  localDir: new THREE.Vector3(),
-  baseDir: new THREE.Vector3(),
-  baked: [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()],
-  targets: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()],
-};
-
-export function solveFingerRotations(
-  humanoid: any,
-  side: 'left' | 'right',
-  hasTrack: (vrmBoneName: string) => boolean
-): void {
-  const setups = fingerSetups.get(humanoid);
-  if (!humanoid || !setups) return;
-
-  const hand = humanoid.getNormalizedBoneNode(`${side}Hand`) as THREE.Object3D | null;
-  if (!hand) return;
-  if (!hasTrack(`${side}Hand`)) return;
-
-  hand.getWorldQuaternion(scratch.handWorld);
-  scratch.baseDir.set(side === 'left' ? 1 : -1, 0, 0);
-
-  for (const setup of setups[side]) {
-    let tracked = true;
-    for (const name of setup.names) {
-      if (!hasTrack(name)) {
-        tracked = false;
-        break;
-      }
-    }
-    if (!tracked) continue;
-
-    // Baked rotations and the direction each bone should point at.
-    scratch.absolute.copy(scratch.handWorld);
-    for (let i = 0; i < setup.bones.length; i++) {
-      const baked = scratch.baked[i].copy(setup.bones[i].quaternion);
-      scratch.absolute.multiply(baked);
-      scratch.targets[i].copy(scratch.baseDir).applyQuaternion(scratch.absolute);
-    }
-
-    scratch.world.copy(scratch.handWorld);
-    for (let i = 0; i < setup.bones.length; i++) {
-      const baked = scratch.baked[i];
-      scratch.bakedDir.copy(setup.dirs[i]).applyQuaternion(baked);
-      scratch.localDir
-        .copy(scratch.targets[i])
-        .applyQuaternion(scratch.inverse.copy(scratch.world).invert())
-        .normalize();
-
-      const solved = scratch.solved.copy(baked);
-      // A bone flipped 180 degrees has no unique axis, so keep the baked rotation.
-      if (scratch.bakedDir.dot(scratch.localDir) > -0.999) {
-        solved.setFromUnitVectors(scratch.bakedDir, scratch.localDir).multiply(baked);
-      }
-
-      setup.bones[i].quaternion.copy(solved);
-      scratch.world.multiply(solved);
-    }
-  }
 }
 
 const originals = new WeakMap<object, Map<THREE.Object3D, THREE.Vector3>>();
