@@ -45,8 +45,9 @@ export default function StudioConfigScreen() {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.error) return;
       landmarksRef.current = data;
-      // Only the detected flag drives the UI; re-setting true is a no-op re-render.
-      setIsDetected(true);
+      // Only flips on a real change, so ~7 messages per second never re-render.
+      const detected = data.length > 0;
+      setIsDetected((previous) => (previous === detected ? previous : detected));
     } catch (e) { }
   };
 
