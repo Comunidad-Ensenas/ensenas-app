@@ -14,6 +14,7 @@
     "build:studio": "eas build --profile preview-studio --platform android"
   },
   "dependencies": {
+    "@blobatar/react": "^2.7.0",
     "@dr.pogodin/react-native-fs": "2.40.4",
     "@dr.pogodin/react-native-static-server": "^0.28.1",
     "@expo-google-fonts/poppins": "^0.4.1",
@@ -23,6 +24,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@supabase/supabase-js": "^2.105.1",
+    "blobatar": "^2.7.0",
     "drizzle-orm": "^0.45.1",
     "expo": "~55.0.4",
     "expo-asset": "~55.0.8",
