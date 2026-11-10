@@ -9,9 +9,9 @@ import { useTheme } from '@/hooks/useTheme';
 import { useStudioStore } from '@/store/useStudioStore';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChatBubble, Check, DragHandGesture, Plus, VideoCamera, Xmark } from 'iconoir-react-native';
+import { ChatBubble, Check, CheckCircle, DragHandGesture, Plus, VideoCamera, Xmark } from 'iconoir-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type TabKey = 'configs' | 'signs' | 'phrases';
@@ -132,15 +132,48 @@ export default function StudioModuleScreen() {
 
   const activeData = activeTab === 'configs' ? availableConfigs : activeTab === 'signs' ? availableSigns : availablePhrases;
 
+  const blocks = useMemo(() => {
+    const groups: { item: any; index: number }[][] = [];
+    let current: { item: any; index: number }[] = [];
+
+    moduleItems.forEach((item, index) => {
+      current.push({ item, index });
+      if (item.is_checkpoint) {
+        groups.push(current);
+        current = [];
+      }
+    });
+    if (current.length > 0) groups.push(current);
+
+    return groups;
+  }, [moduleItems]);
+
+  const lastItem = moduleItems[moduleItems.length - 1];
+  const canAddCheckpoint = Boolean(lastItem) && !lastItem.is_checkpoint;
+
   const handleAddItem = (item: { id: string }) => {
     const source = activeData.find(candidate => candidate.id === item.id);
     if (!source) return;
-    setModuleItems([...moduleItems, { ...source, listId: Date.now().toString() + Math.random().toString() }]);
+    setModuleItems([...moduleItems, { ...source, is_checkpoint: false, evaluate_this: false, listId: Date.now().toString() + Math.random().toString() }]);
     setIsSelectorOpen(false);
   };
 
   const handleRemoveItem = (listIdToRemove: string) => {
     setModuleItems(moduleItems.filter(item => item.listId !== listIdToRemove));
+  };
+
+  const handleAddCheckpoint = () => {
+    if (!canAddCheckpoint) return;
+    const lastIndex = moduleItems.length - 1;
+    setModuleItems(moduleItems.map((item, index) => index === lastIndex ? { ...item, is_checkpoint: true } : item));
+  };
+
+  const handleRemoveCheckpoint = (listId: string) => {
+    setModuleItems(moduleItems.map(item => item.listId === listId ? { ...item, is_checkpoint: false } : item));
+  };
+
+  const handleToggleEvaluateThis = (listId: string, value: boolean) => {
+    setModuleItems(moduleItems.map(item => item.listId === listId ? { ...item, evaluate_this: value } : item));
   };
 
   const handleSaveModule = async () => {
@@ -259,29 +292,67 @@ export default function StudioModuleScreen() {
           </View>
 
           <View style={styles.itemsListContainer}>
-            {moduleItems.map((item, index) => (
-              <View key={item.listId} style={[styles.moduleItemRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.itemTypeIcon, { backgroundColor: item.type === 'config' ? `${palette.deepSkyBlue}20` : item.type === 'sign' ? `${colors.success}20` : `${palette.powderBlush}20` }]}>
-                  {item.type === 'config'
-                    ? <DragHandGesture width={20} height={20} color={palette.deepSkyBlue} strokeWidth={2} />
-                    : item.type === 'sign'
-                    ? <VideoCamera width={20} height={20} color={colors.success} strokeWidth={2} />
-                    : <ChatBubble width={20} height={20} color={palette.powderBlush} strokeWidth={2} />
-                  }
-                </View>
-                <View style={styles.itemInfo}>
-                  <Typography variant="body" color={colors.text} style={{ fontWeight: '600' }} numberOfLines={1}>{item.label}</Typography>
-                  <Typography variant="label" color={colors.textSecondary}>{item.type === 'config' ? 'Configuración' : item.type === 'sign' ? 'Seña Individual' : 'Frase'}</Typography>
-                </View>
-                <Typography variant="h3" color={colors.textSecondary} style={{ marginRight: 16 }}>#{index + 1}</Typography>
-                <Pressable
-                  onPress={() => handleRemoveItem(item.listId)}
-                  style={[styles.removeItemBtn, { backgroundColor: colors.input }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Quitar ${item.label}`}
-                >
-                  <Xmark width={18} height={18} color={colors.textSecondary} strokeWidth={2.5} />
-                </Pressable>
+            {blocks.map((block, blockIndex) => (
+              <View key={`block_${blockIndex}`} style={styles.blockContainer}>
+                <Typography variant="label" color={colors.textSecondary} style={styles.blockTitle}>BLOQUE {blockIndex + 1}</Typography>
+
+                {block.map(({ item, index }) => (
+                  <View key={item.listId} style={styles.blockItem}>
+                    <View style={[styles.moduleItemRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <View style={[styles.itemTypeIcon, { backgroundColor: item.type === 'config' ? `${palette.deepSkyBlue}20` : item.type === 'sign' ? `${colors.success}20` : `${palette.powderBlush}20` }]}>
+                        {item.type === 'config'
+                          ? <DragHandGesture width={20} height={20} color={palette.deepSkyBlue} strokeWidth={2} />
+                          : item.type === 'sign'
+                          ? <VideoCamera width={20} height={20} color={colors.success} strokeWidth={2} />
+                          : <ChatBubble width={20} height={20} color={palette.powderBlush} strokeWidth={2} />
+                        }
+                      </View>
+                      <View style={styles.itemInfo}>
+                        <Typography variant="body" color={colors.text} style={{ fontWeight: '600' }} numberOfLines={1}>{item.label}</Typography>
+                        <Typography variant="label" color={colors.textSecondary}>{item.type === 'config' ? 'Configuración' : item.type === 'sign' ? 'Seña Individual' : 'Frase'}</Typography>
+                        <View style={styles.evaluateRow}>
+                          <Switch
+                            value={Boolean(item.evaluate_this)}
+                            onValueChange={(value) => handleToggleEvaluateThis(item.listId, value)}
+                            trackColor={{ false: colors.border, true: palette.deepSkyBlue }}
+                            thumbColor="#FFFFFF"
+                            accessibilityLabel={`Evaluar en la próxima evaluación: ${item.label}`}
+                          />
+                          <Typography variant="label" color={colors.textSecondary} style={styles.evaluateLabel}>Evaluar en la próxima evaluación</Typography>
+                        </View>
+                      </View>
+                      <Typography variant="h3" color={colors.textSecondary} style={{ marginRight: 16 }}>#{index + 1}</Typography>
+                      <Pressable
+                        onPress={() => handleRemoveItem(item.listId)}
+                        style={[styles.removeItemBtn, { backgroundColor: colors.input }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Quitar ${item.label}`}
+                      >
+                        <Xmark width={18} height={18} color={colors.textSecondary} strokeWidth={2.5} />
+                      </Pressable>
+                    </View>
+
+                    {item.is_checkpoint && (
+                      <View style={[styles.checkpointCard, { backgroundColor: colors.successBg, borderColor: colors.success }]}>
+                        <CheckCircle width={24} height={24} color={colors.success} strokeWidth={2} />
+                        <View style={styles.checkpointInfo}>
+                          <Typography variant="body" color={colors.text} style={{ fontWeight: '700' }}>Punto de Evaluación</Typography>
+                          <Typography variant="label" color={colors.textSecondary}>
+                            Aquí termina el bloque y se evalúan los elementos marcados.
+                          </Typography>
+                        </View>
+                        <Pressable
+                          onPress={() => handleRemoveCheckpoint(item.listId)}
+                          style={[styles.removeItemBtn, { backgroundColor: colors.surface }]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Quitar punto de evaluación"
+                        >
+                          <Xmark width={18} height={18} color={colors.textSecondary} strokeWidth={2.5} />
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                ))}
               </View>
             ))}
 
@@ -293,6 +364,18 @@ export default function StudioModuleScreen() {
             >
               <Plus width={24} height={24} color={palette.deepSkyBlue} strokeWidth={2.5} />
               <Typography variant="body" color={palette.deepSkyBlue} style={{ fontWeight: '600', marginLeft: 8 }}>Agregar Elemento</Typography>
+            </Pressable>
+
+            <Pressable
+              style={[styles.addItemBtn, { borderColor: colors.success, backgroundColor: colors.successBg, marginTop: 0, opacity: canAddCheckpoint ? 1 : 0.4 }]}
+              onPress={handleAddCheckpoint}
+              disabled={!canAddCheckpoint}
+              accessibilityRole="button"
+              accessibilityLabel="Agregar punto de evaluación al final del bloque"
+              accessibilityState={{ disabled: !canAddCheckpoint }}
+            >
+              <CheckCircle width={24} height={24} color={colors.success} strokeWidth={2.5} />
+              <Typography variant="body" color={colors.success} style={{ fontWeight: '600', marginLeft: 8 }}>Agregar Punto de Evaluación</Typography>
             </Pressable>
           </View>
         </View>
@@ -348,9 +431,16 @@ const styles = StyleSheet.create({
   difficultyContainer: { flexDirection: 'row', gap: 8 },
   difficultyBox: { flex: 1, height: 48, borderRadius: 12, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
   itemsListContainer: { gap: 12 },
+  blockContainer: { gap: 12 },
+  blockTitle: { letterSpacing: 0.5, marginBottom: -4 },
+  blockItem: { gap: 12 },
   moduleItemRow: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 2 },
   itemTypeIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   itemInfo: { flex: 1, paddingRight: 8 },
+  evaluateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  evaluateLabel: { flex: 1 },
+  checkpointCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 20, borderWidth: 2 },
+  checkpointInfo: { flex: 1 },
   removeItemBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
   addItemBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20, borderRadius: 20, borderWidth: 2, borderStyle: 'dashed', marginTop: 8 },
   bottomBar: { paddingHorizontal: 24, paddingTop: 16, borderTopWidth: 1 },
