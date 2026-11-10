@@ -114,6 +114,8 @@ export default function StudioModuleScreen() {
             label,
             type: item.item_type,
             isLocal,
+            is_checkpoint: item.is_checkpoint ?? false,
+            evaluate_this: item.evaluate_this ?? false,
             listId: `loaded_${item.item_type}_${item.order_index}_${Date.now()}`
           };
         });
@@ -158,7 +160,9 @@ export default function StudioModuleScreen() {
           config_id: item.type === 'config' ? item.id : null,
           sign_id: item.type === 'sign' ? item.id : null,
           phrase_id: item.type === 'phrase' ? item.id : null,
-          order_index: index
+          order_index: index,
+          is_checkpoint: item.is_checkpoint ?? false,
+          evaluate_this: item.evaluate_this ?? false
         }))
       };
 

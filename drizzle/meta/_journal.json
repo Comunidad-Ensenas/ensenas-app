@@ -15,6 +15,13 @@
       "when": 1793909048360,
       "tag": "0001_neat_sharon_carter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794320568539,
+      "tag": "0002_chubby_black_knight",
+      "breakpoints": true
     }
   ]
 }

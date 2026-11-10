@@ -172,7 +172,9 @@ export default function StudioExportScreen() {
           config_id: item.config_id || null,
           sign_id: item.sign_id || null,
           phrase_id: item.phrase_id || null,
-          order_index: item.order_index
+          order_index: item.order_index,
+          is_checkpoint: item.is_checkpoint ?? false,
+          evaluate_this: item.evaluate_this ?? false
         })));
         if (moduleItemsPayload.length > 0) {
           const { error: miError } = await supabase.from('module_items').upsert(moduleItemsPayload);

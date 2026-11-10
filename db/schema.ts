@@ -87,6 +87,8 @@ export const moduleItems = sqliteTable('module_items', {
   signId: text('sign_id').references(() => signs.localId, { onDelete: 'cascade' }),
   phraseId: text('phrase_id').references(() => phrases.localId, { onDelete: 'cascade' }),
   orderIndex: integer('order_index').notNull(),
+  isCheckpoint: integer('is_checkpoint', { mode: 'boolean' }).notNull().default(false),
+  evaluateThis: integer('evaluate_this', { mode: 'boolean' }).notNull().default(false),
 });
 
 export const signExecutionHints = sqliteTable('sign_execution_hints', {
