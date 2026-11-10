@@ -29,6 +29,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const ANIMATIONS_DIRECTORY = `${FileSystem.documentDirectory}ensenas/animations/`;
+const ANIMATIONS_BUCKET = 'animations';
 
 export default function StudioExportScreen() {
   const { colors } = useTheme();
@@ -117,12 +118,25 @@ export default function StudioExportScreen() {
             raw_frames: rawFramesJson
           });
 
+          if (Object.keys(bakedAnimationJson).length === 0) {
+            throw new Error(`La seña "${s.meanings?.[0] || s.local_id}" no tiene animación horneada. Vuelve a capturarla antes de exportar.`);
+          }
+
+          const animationFilename = `${s.local_id}.json`;
+          const { error: uploadError } = await supabase.storage
+            .from(ANIMATIONS_BUCKET)
+            .upload(animationFilename, JSON.stringify(bakedAnimationJson), {
+              contentType: 'application/json',
+              upsert: true
+            });
+          if (uploadError) throw uploadError;
+
           appSignsPayload.push({
             id: s.local_id,
             meanings: s.meanings,
             dominant_config_id: s.dominant_config_id,
             recessive_config_id: s.recessive_config_id,
-            animation_data: bakedAnimationJson, 
+            animation_filename: animationFilename,
             raw_source_id: s.local_id,
             learning_tips: s.learning_tips || []
           });
@@ -150,8 +164,14 @@ export default function StudioExportScreen() {
           sign_id: s.sign_id,
           order_index: s.order_index
         })));
+        // Replace the whole set so signs removed in Studio do not linger in production.
+        const { error: psDeleteError } = await supabase
+          .from('phrase_signs')
+          .delete()
+          .in('phrase_id', phrases.map(p => p.local_id));
+        if (psDeleteError) throw psDeleteError;
         if (phraseSignsPayload.length > 0) {
-          const { error: psError } = await supabase.from('phrase_signs').upsert(phraseSignsPayload);
+          const { error: psError } = await supabase.from('phrase_signs').insert(phraseSignsPayload);
           if (psError) throw psError;
         }
       }
@@ -177,7 +197,13 @@ export default function StudioExportScreen() {
           evaluate_this: item.evaluate_this ?? false
         })));
         if (moduleItemsPayload.length > 0) {
-          const { error: miError } = await supabase.from('module_items').upsert(moduleItemsPayload);
+          const { error: miDeleteError } = await supabase
+            .from('module_items')
+            .delete()
+            .in('module_id', modules.map(m => m.local_id));
+          if (miDeleteError) throw miDeleteError;
+
+          const { error: miError } = await supabase.from('module_items').insert(moduleItemsPayload);
           if (miError) throw miError;
         }
       }
